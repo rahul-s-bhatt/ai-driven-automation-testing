@@ -1,0 +1,98 @@
+# Example configuration file for the testing framework
+
+# Browser configuration
+browser:
+  # Browser to use (chrome/firefox)
+  name: chrome
+  
+  # Run browser in headless mode
+  headless: false
+  
+  # Browser window size
+  window_size: [1920, 1080]
+  
+  # Implicit wait timeout in seconds
+  implicit_wait: 10
+  
+  # Page load timeout in seconds
+  page_load_timeout: 30
+
+# Test execution configuration
+test:
+  # Base URL for testing
+  base_url: http://localhost:3000
+  
+  # Directory for saving screenshots
+  screenshot_dir: test_output/screenshots
+  
+  # Directory for saving test reports
+  report_dir: test_output/reports
+  
+  # Directory for saving logs
+  log_dir: test_output/logs
+  
+  # Number of retry attempts for failed tests
+  retry_attempts: 2
+  
+  # Default wait timeout in seconds
+  wait_timeout: 10
+
+# Element classification settings
+element_classification:
+  confidence_threshold: 0.8
+  use_ml_model: false
+
+# Performance thresholds (in milliseconds)
+performance:
+  page_load_threshold: 3000
+  animation_duration: 300
+  lazy_load_timeout: 2000
+  scroll_pause_time: 500
+
+# Screenshot settings
+screenshots:
+  take_on_failure: true
+  take_on_success: false
+  full_page: true
+  quality: 80
+
+# Validation settings
+validation:
+  strict_mode: false
+  check_accessibility: true
+  check_console_errors: true
+  allowed_console_levels: [info, warn]
+
+# Report settings
+reporting:
+  include_screenshots: true
+  include_page_source: false
+  include_console_logs: true
+  include_network_logs: false
+  report_format: html
+  report_theme: light
+
+# Logging settings
+logging:
+  console_level: info
+  file_level: debug
+  include_timestamp: true
+  log_http_requests: true
+  log_performance_metrics: true
+
+# Network settings
+network:
+  timeout: 30000
+  retry_count: 3
+  retry_delay: 1000
+  ignore_ssl_errors: false
+
+# Test data
+test_data:
+  users:
+    admin:
+      username: admin@example.com
+      password: admin123
+    standard:
+      username: user@example.com
+      password: user123

@@ -1,0 +1,57 @@
+# Example test scenarios for website testing
+
+scenarios:
+  - name: Login Flow Test
+    description: Test the website login functionality
+    tags: [login, authentication, critical]
+    steps:
+      - click on the login button
+      - type "testuser@example.com" into the email field
+      - type "password123" into the password field
+      - click on the submit button
+      - wait for 2 seconds
+      - verify that the dashboard appears
+
+  - name: Product Search Test
+    description: Test the product search and filtering functionality
+    tags: [search, products]
+    steps:
+      - type "laptop" into the search box
+      - click on the search button
+      - wait for the search results
+      - verify that the search results appear
+      - select "Price - High to Low" from the sort dropdown
+      - verify that the product list updates
+      - click on the filters button
+      - select "In Stock" from availability filters
+      - verify that the filtered results show only in-stock items
+
+  - name: Shopping Cart Test
+    description: Test the shopping cart functionality
+    tags: [cart, checkout]
+    steps:
+      - click on the first product
+      - wait for the product details
+      - verify that the add to cart button appears
+      - click on the add to cart button
+      - verify that the cart count shows "1"
+      - click on the cart icon
+      - wait for the cart page
+      - verify that the product appears in the cart
+      - click on the checkout button
+      - verify that the checkout form appears
+
+  - name: Profile Management Test
+    description: Test user profile management
+    tags: [profile, user-management]
+    steps:
+      - click on the profile menu
+      - click on settings
+      - wait for the profile page
+      - type "John" into the first name field
+      - type "Doe" into the last name field
+      - type "johndoe@example.com" into the email field
+      - click on save changes
+      - wait for 2 seconds
+      - verify that the success message appears
+      - verify that the profile menu shows "John Doe"
