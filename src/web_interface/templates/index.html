@@ -150,6 +150,32 @@
                     <h4><i class="fas fa-lightbulb"></i> Suggested Test Scenarios</h4>
                     <div class="suggestions-container"></div>
                 </div>
+
+                <div id="dual-mode-tests" class="card">
+                    <h4><i class="fas fa-code-branch"></i> Dual-Mode Test Scenarios</h4>
+                    <div class="tabs">
+                        <button class="tab-btn active" onclick="switchTab('human')">
+                            <i class="fas fa-user"></i> Human Instructions
+                        </button>
+                        <button class="tab-btn" onclick="switchTab('automation')">
+                            <i class="fas fa-robot"></i> Automation Script
+                        </button>
+                    </div>
+                    <div class="tab-content">
+                        <div id="human-tests" class="tab-pane active">
+                            <div class="test-instructions"></div>
+                            <button class="btn btn-secondary" onclick="downloadInstructions('human')">
+                                <i class="fas fa-download"></i> Download Instructions
+                            </button>
+                        </div>
+                        <div id="automation-tests" class="tab-pane">
+                            <pre class="code-preview"><code></code></pre>
+                            <button class="btn btn-secondary" onclick="downloadInstructions('automation')">
+                                <i class="fas fa-download"></i> Download Script
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 

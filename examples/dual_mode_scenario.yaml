@@ -1,0 +1,124 @@
+# Enhanced test scenarios supporting both human and automation modes
+
+scenarios:
+  - name: Login Flow Test
+    description: Test the website login functionality
+    tags: [login, authentication, critical]
+    modes:
+      human:
+        preparation: "Ensure you have a test account with credentials: testuser@example.com/password123"
+        success_criteria: "You should see the dashboard after successful login"
+      automation:
+        setup:
+          dependencies: ["selenium", "pytest"]
+          test_data:
+            username: "testuser@example.com"
+            password: "password123"
+    steps:
+      - description: Navigate to login page
+        action: click
+        target: login button
+        human_instruction: "Find and click the login button in the top-right corner"
+        automation:
+          selector: "#loginBtn"
+          wait_for: "element_visible"
+
+      - description: Enter email
+        action: type
+        target: email field
+        value: "testuser@example.com"
+        human_instruction: "Type the test email address into the email input field"
+        automation:
+          selector: "input[name='email']"
+          wait_for: "element_present"
+
+      - description: Enter password
+        action: type
+        target: password field
+        value: "password123"
+        human_instruction: "Type the test password into the password input field"
+        automation:
+          selector: "input[type='password']"
+          wait_for: "element_present"
+
+      - description: Submit login form
+        action: click
+        target: submit button
+        human_instruction: "Click the 'Submit' or 'Login' button to send the form"
+        automation:
+          selector: "button[type='submit']"
+          wait_for: "element_clickable"
+
+      - description: Wait for dashboard
+        action: wait
+        target: dashboard
+        timeout: 5
+        human_instruction: "Wait for the dashboard page to load completely"
+        automation:
+          selector: ".dashboard-container"
+          wait_for: "element_present"
+          timeout: 5
+
+      - description: Verify login success
+        action: verify
+        target: dashboard appears
+        human_instruction: "Verify that you can see the main dashboard interface"
+        automation:
+          assertions:
+            - type: "element_visible"
+              selector: ".dashboard-container"
+            - type: "text_present"
+              selector: ".user-info"
+              text: "testuser@example.com"
+
+  - name: Product Search Test
+    description: Test the product search functionality
+    tags: [search, products]
+    modes:
+      human:
+        preparation: "Ensure you're on the main product listing page"
+        success_criteria: "Search results should show relevant products"
+      automation:
+        setup:
+          dependencies: ["selenium", "pytest"]
+          test_data:
+            search_term: "laptop"
+    steps:
+      - description: Enter search term
+        action: type
+        target: search box
+        value: "laptop"
+        human_instruction: "Type 'laptop' into the main search box at the top of the page"
+        automation:
+          selector: "#searchInput"
+          wait_for: "element_present"
+
+      - description: Submit search
+        action: click
+        target: search button
+        human_instruction: "Click the search button (usually marked with a magnifying glass icon)"
+        automation:
+          selector: "button[type='submit']"
+          wait_for: "element_clickable"
+
+      - description: Wait for results
+        action: wait
+        target: search results
+        timeout: 3
+        human_instruction: "Wait for the search results to load"
+        automation:
+          selector: ".search-results"
+          wait_for: "element_present"
+          timeout: 3
+
+      - description: Verify results
+        action: verify
+        target: search results appear
+        human_instruction: "Verify that you can see a list of laptop products"
+        automation:
+          assertions:
+            - type: "element_visible"
+              selector: ".search-results"
+            - type: "minimum_elements"
+              selector: ".product-card"
+              count: 1

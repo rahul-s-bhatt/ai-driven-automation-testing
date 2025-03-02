@@ -5,9 +5,13 @@ from typing import Dict, Optional, List
 from bs4 import BeautifulSoup
 from selenium import webdriver
 import logging
+from pathlib import Path
+from datetime import datetime
 
 from src.web_analyzer.interfaces.tag_analyzer import SmartTagAnalyzer
 from src.web_analyzer.interfaces.structure_analyzer import EnhancedStructureAnalyzer
+from src.test_engine.dual_mode.parser import DualModeParser
+from src.test_engine.dual_mode.generators import HumanInstructionsGenerator, AutomationGenerator
 
 class WebAnalysisService:
     """Service for coordinating web analysis operations."""
@@ -21,6 +25,10 @@ class WebAnalysisService:
         self.current_page_source = None
         self.current_soup = None
         self.last_analysis = None
+
+        # Initialize dual-mode components
+        self.human_generator = HumanInstructionsGenerator()
+        self.automation_generator = AutomationGenerator()
 
     def analyze_page(self, url: str) -> Dict:
         """
@@ -46,7 +54,8 @@ class WebAnalysisService:
                 'tag_analysis': self._perform_tag_analysis(),
                 'structure_analysis': self._perform_structure_analysis(),
                 'element_suggestions': self._generate_element_suggestions(),
-                'test_recommendations': self._generate_test_recommendations()
+                'test_recommendations': self._generate_test_recommendations(),
+                'dual_mode_tests': self._generate_dual_mode_tests()
             }
 
             self.last_analysis = analysis_result
@@ -60,42 +69,142 @@ class WebAnalysisService:
                 'tag_analysis': {},
                 'structure_analysis': {},
                 'element_suggestions': [],
-                'test_recommendations': []
+                'test_recommendations': [],
+                'dual_mode_tests': {}
             }
 
+    def _generate_dual_mode_tests(self) -> Dict:
+        """Generate both human and automated test scenarios based on analysis."""
+        if not self.last_analysis:
+            return {}
+
+        scenarios = []
+
+        # Generate scenarios based on element suggestions
+        for suggestion in self.last_analysis.get('element_suggestions', []):
+            scenario = self._create_element_test_scenario(suggestion)
+            if scenario:
+                scenarios.append(scenario)
+
+        # Generate scenarios based on structure analysis
+        structure_data = self.last_analysis.get('structure_analysis', {})
+        if 'components' in structure_data:
+            for scenario in self._create_component_test_scenarios(structure_data['components']):
+                scenarios.append(scenario)
+
+        if not scenarios:
+            return {}
+
+        # Generate both human and automated outputs
+        output_dir = Path('test_output/analysis')
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        human_output = self.human_generator.generate_test_plan(scenarios, str(output_dir))
+        automation_output = self.automation_generator.generate_test_suite(scenarios, str(output_dir))
+
+        return {
+            'scenarios': scenarios,
+            'outputs': {
+                'human_instructions': human_output,
+                'automation_script': automation_output
+            }
+        }
+
+    def _create_element_test_scenario(self, suggestion: Dict) -> Optional[Dict]:
+        """Create a test scenario for a suggested element."""
+        if not suggestion.get('selector'):
+            return None
+
+        return {
+            'name': f"Test {suggestion['type']} Element",
+            'description': suggestion.get('description', ''),
+            'tags': [suggestion['type'], 'element-test'],
+            'modes': {
+                'human': {
+                    'preparation': "Ensure the page is loaded and visible",
+                    'success_criteria': f"The {suggestion['type']} element should be visible and interactive"
+                },
+                'automation': {
+                    'setup': {
+                        'dependencies': ['selenium', 'pytest'],
+                        'test_data': {}
+                    }
+                }
+            },
+            'steps': [
+                {
+                    'description': f"Verify {suggestion['type']} element presence",
+                    'action': 'verify',
+                    'target': suggestion['selector'],
+                    'human_instruction': f"Check if the {suggestion['type']} element is visible",
+                    'automation': {
+                        'selector': suggestion['selector'],
+                        'wait_for': 'element_visible'
+                    }
+                }
+            ]
+        }
+
+    def _create_component_test_scenarios(self, components: Dict) -> List[Dict]:
+        """Create test scenarios for identified components."""
+        scenarios = []
+
+        if 'interactive_elements' in components:
+            for element in components['interactive_elements']:
+                scenario = {
+                    'name': f"Test {element.get('description', 'Interactive')} Component",
+                    'description': f"Verify functionality of {element.get('description', 'component')}",
+                    'tags': ['component', 'interactive'],
+                    'modes': {
+                        'human': {
+                            'preparation': "Ensure the component is in its initial state",
+                            'success_criteria': "Component should respond to interactions correctly"
+                        },
+                        'automation': {
+                            'setup': {
+                                'dependencies': ['selenium', 'pytest'],
+                                'test_data': {}
+                            }
+                        }
+                    },
+                    'steps': [
+                        {
+                            'description': "Verify component presence",
+                            'action': 'verify',
+                            'target': element.get('selector', ''),
+                            'human_instruction': f"Locate the {element.get('description', 'component')}",
+                            'automation': {
+                                'selector': element.get('selector', ''),
+                                'wait_for': 'element_visible'
+                            }
+                        }
+                    ]
+                }
+                scenarios.append(scenario)
+
+        return scenarios
+
     def get_element_suggestions(self, human_input: str) -> List[Dict]:
-        """
-        Generate element suggestions based on human input.
-        
-        Args:
-            human_input: Natural language description of desired elements
-            
-        Returns:
-            List of suggested elements with selectors
-        """
+        """Generate element suggestions based on human input."""
         if not self.last_analysis:
             return []
 
         try:
-            # Clean and normalize input
             search_terms = self._normalize_input(human_input)
-            
             suggestions = []
             analyzed_tags = self.last_analysis['tag_analysis']
             
-            # Check semantic matches
             if 'semantic_structure' in analyzed_tags:
                 suggestions.extend(
                     self._find_semantic_matches(search_terms, analyzed_tags['semantic_structure'])
                 )
             
-            # Check pattern matches
             if 'tag_patterns' in analyzed_tags:
                 suggestions.extend(
                     self._find_pattern_matches(search_terms, analyzed_tags['tag_patterns'])
                 )
             
-            # Check attribute matches
             if 'key_attributes' in analyzed_tags:
                 suggestions.extend(
                     self._find_attribute_matches(search_terms, analyzed_tags['key_attributes'])
@@ -108,22 +217,12 @@ class WebAnalysisService:
             return []
 
     def get_test_scenarios(self, element_type: str) -> List[Dict]:
-        """
-        Generate test scenarios for specific element types.
-        
-        Args:
-            element_type: Type of element to generate scenarios for
-            
-        Returns:
-            List of recommended test scenarios
-        """
+        """Generate test scenarios for specific element types."""
         if not self.last_analysis:
             return []
 
         try:
             scenarios = []
-            
-            # Get relevant analysis data
             structure_data = self.last_analysis['structure_analysis']
             
             if 'layout' in structure_data:
@@ -169,44 +268,41 @@ class WebAnalysisService:
         """Generate smart element suggestions based on analysis."""
         suggestions = []
         
-        # Add suggestions based on tag analysis
-        if 'semantic_structure' in self.last_analysis['tag_analysis']:
-            semantic_data = self.last_analysis['tag_analysis']['semantic_structure']
-            
-            # Add header suggestions
-            if 'header_elements' in semantic_data:
-                for header in semantic_data['header_elements'].get('hierarchy', []):
-                    suggestions.append({
-                        'type': 'header',
-                        'selector': f"h{header}",
-                        'confidence': 0.9,
-                        'description': f"Level {header} heading"
-                    })
+        if 'tag_analysis' in self.last_analysis:
+            if 'semantic_structure' in self.last_analysis['tag_analysis']:
+                semantic_data = self.last_analysis['tag_analysis']['semantic_structure']
+                
+                if 'header_elements' in semantic_data:
+                    for header in semantic_data['header_elements'].get('hierarchy', []):
+                        suggestions.append({
+                            'type': 'header',
+                            'selector': f"h{header}",
+                            'confidence': 0.9,
+                            'description': f"Level {header} heading"
+                        })
 
-            # Add navigation suggestions
-            if 'navigation_elements' in semantic_data:
-                nav_data = semantic_data['navigation_elements']
-                if nav_data.get('primary_nav'):
-                    suggestions.append({
-                        'type': 'navigation',
-                        'selector': 'nav[role="navigation"]',
-                        'confidence': 0.95,
-                        'description': "Primary navigation"
-                    })
+                if 'navigation_elements' in semantic_data:
+                    nav_data = semantic_data['navigation_elements']
+                    if nav_data.get('primary_nav'):
+                        suggestions.append({
+                            'type': 'navigation',
+                            'selector': 'nav[role="navigation"]',
+                            'confidence': 0.95,
+                            'description': "Primary navigation"
+                        })
 
-        # Add suggestions based on structure analysis
-        if 'components' in self.last_analysis['structure_analysis']:
-            component_data = self.last_analysis['structure_analysis']['components']
-            
-            # Add interactive element suggestions
-            if 'interactive_elements' in component_data:
-                for element in component_data['interactive_elements']:
-                    suggestions.append({
-                        'type': 'interactive',
-                        'selector': element.get('selector', ''),
-                        'confidence': 0.85,
-                        'description': element.get('description', '')
-                    })
+        if 'structure_analysis' in self.last_analysis:
+            if 'components' in self.last_analysis['structure_analysis']:
+                component_data = self.last_analysis['structure_analysis']['components']
+                
+                if 'interactive_elements' in component_data:
+                    for element in component_data['interactive_elements']:
+                        suggestions.append({
+                            'type': 'interactive',
+                            'selector': element.get('selector', ''),
+                            'confidence': 0.85,
+                            'description': element.get('description', '')
+                        })
 
         return suggestions
 
@@ -214,55 +310,48 @@ class WebAnalysisService:
         """Generate test recommendations based on analysis."""
         recommendations = []
         
-        # Add recommendations based on structure analysis
-        if 'dynamic_content' in self.last_analysis['structure_analysis']:
-            dynamic_data = self.last_analysis['structure_analysis']['dynamic_content']
-            
-            # Add mutation-based recommendations
-            if 'mutations' in dynamic_data:
-                mutation_info = dynamic_data['mutations']
-                if mutation_info.get('total_mutations', 0) > 0:
-                    recommendations.append({
-                        'type': 'dynamic_content',
-                        'priority': 'high',
-                        'description': "Test dynamic content updates",
-                        'steps': [
-                            "Monitor DOM mutations",
-                            "Verify content updates",
-                            "Check state consistency"
-                        ]
-                    })
+        if 'structure_analysis' in self.last_analysis:
+            if 'dynamic_content' in self.last_analysis['structure_analysis']:
+                dynamic_data = self.last_analysis['structure_analysis']['dynamic_content']
+                
+                if 'mutations' in dynamic_data:
+                    mutation_info = dynamic_data['mutations']
+                    if mutation_info.get('total_mutations', 0) > 0:
+                        recommendations.append({
+                            'type': 'dynamic_content',
+                            'priority': 'high',
+                            'description': "Test dynamic content updates",
+                            'steps': [
+                                "Monitor DOM mutations",
+                                "Verify content updates",
+                                "Check state consistency"
+                            ]
+                        })
 
-        # Add recommendations based on tag analysis
-        if 'tag_patterns' in self.last_analysis['tag_analysis']:
-            pattern_data = self.last_analysis['tag_analysis']['tag_patterns']
-            
-            # Add form testing recommendations
-            if 'forms' in pattern_data:
-                for form in pattern_data['forms']:
-                    recommendations.append({
-                        'type': 'form_validation',
-                        'priority': 'high',
-                        'description': f"Test form with {len(form.get('inputs', []))} fields",
-                        'steps': [
-                            "Validate required fields",
-                            "Test input constraints",
-                            "Verify form submission"
-                        ]
-                    })
+        if 'tag_analysis' in self.last_analysis:
+            if 'tag_patterns' in self.last_analysis['tag_analysis']:
+                pattern_data = self.last_analysis['tag_analysis']['tag_patterns']
+                
+                if 'forms' in pattern_data:
+                    for form in pattern_data['forms']:
+                        recommendations.append({
+                            'type': 'form_validation',
+                            'priority': 'high',
+                            'description': f"Test form with {len(form.get('inputs', []))} fields",
+                            'steps': [
+                                "Validate required fields",
+                                "Test input constraints",
+                                "Verify form submission"
+                            ]
+                        })
 
         return recommendations
 
     def _normalize_input(self, input_text: str) -> List[str]:
         """Normalize and tokenize human input."""
-        # Convert to lowercase and split into words
         words = input_text.lower().split()
-        
-        # Remove common stop words
         stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to'}
-        words = [w for w in words if w not in stop_words]
-        
-        return words
+        return [w for w in words if w not in stop_words]
 
     def _find_semantic_matches(self, search_terms: List[str], semantic_data: Dict) -> List[Dict]:
         """Find matches based on semantic structure."""
@@ -311,12 +400,9 @@ class WebAnalysisService:
 
     def _prioritize_suggestions(self, suggestions: List[Dict]) -> List[Dict]:
         """Prioritize and sort element suggestions."""
-        # Sort by confidence score
         sorted_suggestions = sorted(
             suggestions,
             key=lambda x: x.get('confidence', 0),
             reverse=True
         )
-        
-        # Limit to top 5 suggestions
         return sorted_suggestions[:5]

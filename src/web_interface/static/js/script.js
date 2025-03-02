@@ -302,6 +302,42 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                     `).join('');
             }
 
+            // Update dual-mode test results
+            if (data.analysis.dual_mode_tests) {
+                const dualModeSection = document.getElementById('dual-mode-tests');
+                if (dualModeSection) {
+                    // Update human instructions
+                    const humanInstructions = dualModeSection.querySelector('.test-instructions');
+                    if (humanInstructions && data.analysis.dual_mode_tests.outputs?.human_instructions) {
+                        fetch(data.analysis.dual_mode_tests.outputs.human_instructions)
+                            .then(response => response.text())
+                            .then(text => {
+                                humanInstructions.innerHTML = marked(text); // Using marked.js for markdown rendering
+                                humanInstructions.querySelectorAll('pre code').forEach((block) => {
+                                    if (window.hljs) {
+                                        hljs.highlightElement(block);
+                                    }
+                                });
+                            });
+                    }
+
+                    // Update automation script
+                    const automationCode = dualModeSection.querySelector('.code-preview code');
+                    if (automationCode && data.analysis.dual_mode_tests.outputs?.automation_script) {
+                        fetch(data.analysis.dual_mode_tests.outputs.automation_script)
+                            .then(response => response.text())
+                            .then(text => {
+                                automationCode.textContent = text;
+                                if (window.hljs) {
+                                    hljs.highlightElement(automationCode);
+                                }
+                            });
+                    }
+
+                    dualModeSection.style.display = 'block';
+                }
+            }
+
             // Show results
             results.style.display = 'block';
         } else {
@@ -425,6 +461,50 @@ ${steps.join('\n')}`;
     }
 });
 
+// Tab Management for Dual-Mode Tests
+function switchTab(mode) {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    
+    tabBtns.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.onclick.toString().includes(mode)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    tabPanes.forEach(pane => {
+        pane.classList.remove('active');
+        if (pane.id === `${mode}-tests`) {
+            pane.classList.add('active');
+        }
+    });
+}
+
+// Download Handlers for Test Instructions
+function downloadInstructions(mode) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    let content, filename;
+    
+    if (mode === 'human') {
+        content = document.querySelector('.test-instructions').innerText;
+        filename = `human_test_instructions_${timestamp}.md`;
+    } else {
+        content = document.querySelector('.code-preview code').innerText;
+        filename = `automated_test_script_${timestamp}.py`;
+    }
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -434,4 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Show initial section
     showSection('getting-started', document.querySelector('.nav-item'));
+    
+    // Initialize first tab for dual-mode tests
+    switchTab('human');
 });

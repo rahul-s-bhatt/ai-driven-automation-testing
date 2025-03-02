@@ -22,6 +22,7 @@ from src.web_analyzer.dom_parser import DOMParser
 from src.web_analyzer.element_classifier import ElementClassifier
 from src.web_analyzer.structure_analyzer import StructureAnalyzer
 from src.web_analyzer.scraping_analyzer import ScrapingAnalyzer
+from src.web_analyzer.services.analysis_service import WebAnalysisService
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
@@ -82,11 +83,40 @@ def analyze_site():
         driver = setup_webdriver(headless=True)
         
         try:
-            # Initialize analyzer
-            analyzer = StructureAnalyzer(driver)
+            # Initialize analysis service
+            analysis_service = WebAnalysisService(driver)
             
             # Analyze website
-            analysis_results = analyzer.analyze_website(url)
+            analysis_results = analysis_service.analyze_page(url)
+
+            # Generate test output files
+            if 'dual_mode_tests' in analysis_results:
+                temp_dir = tempfile.mkdtemp()
+                temp_path = Path(temp_dir)
+                
+                # Create output directories
+                test_output_dir = temp_path / 'test_output'
+                test_output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Store file paths in the results
+                if 'outputs' in analysis_results['dual_mode_tests']:
+                    outputs = analysis_results['dual_mode_tests']['outputs']
+                    
+                    # Save and update path for human instructions
+                    if 'human_instructions' in outputs:
+                        human_file = test_output_dir / f'human_instructions_{int(time.time())}.md'
+                        with open(human_file, 'w') as f:
+                            f.write(outputs['human_instructions'])
+                        outputs['human_instructions'] = str(human_file.relative_to(temp_path))
+
+                    # Save and update path for automation script
+                    if 'automation_script' in outputs:
+                        auto_file = test_output_dir / f'automation_test_{int(time.time())}.py'
+                        with open(auto_file, 'w') as f:
+                            f.write(outputs['automation_script'])
+                        outputs['automation_script'] = str(auto_file.relative_to(temp_path))
+
+                app.config['TEST_OUTPUT_DIR'] = str(temp_dir)
             
             return jsonify({
                 'success': True,
