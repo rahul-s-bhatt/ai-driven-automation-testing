@@ -27,9 +27,6 @@
         <div class="tutorial-nav">
             <button class="nav-item active" onclick="showSection('getting-started', this)">Getting Started</button>
             <button class="nav-item" onclick="showSection('analyze', this)">Analyze Website</button>
-            <button class="nav-item" onclick="showSection('scraping', this)">Scraping Analysis</button>
-            <button class="nav-item" onclick="showSection('dynamic-content', this)">Dynamic Content</button>
-            <button class="nav-item" onclick="showSection('troubleshooting', this)">Help</button>
             <button class="nav-item" onclick="showSection('test-runner', this)">Test Runner</button>
         </div>
 
@@ -93,25 +90,37 @@
 
             <div id="analysis-results" class="analysis-result" style="display: none;">
                 <h3>Analysis Results</h3>
-                <div class="structure-info"></div>
+                <div class="analysis-stats">
+                    <h4>📊 Page Statistics</h4>
+                    <div class="stats-container">
+                        <!-- Will be populated by script.js with actual metrics -->
+                    </div>
+                </div>
+                <div class="analysis-sections">
+                    <div class="forms-section">
+                        <h4>📝 Forms Found</h4>
+                        <div class="forms-container">
+                            <!-- Will be populated by script.js -->
+                        </div>
+                    </div>
+                    <div class="navigation-section">
+                        <h4>🧭 Navigation Structure</h4>
+                        <div class="navigation-container">
+                            <!-- Will be populated by script.js -->
+                        </div>
+                    </div>
+                    <div class="dynamic-section">
+                        <h4>⚡ Dynamic Content</h4>
+                        <div class="dynamic-container">
+                            <!-- Will be populated by script.js -->
+                        </div>
+                    </div>
+                </div>
                 <div id="suggested-scenarios">
                     <h4>📋 Suggested Test Scenarios</h4>
                     <div class="suggestions-container"></div>
                 </div>
             </div>
-        </div>
-
-        <!-- Other sections -->
-        <div id="scraping" class="tutorial-section">
-            <!-- Scraping content -->
-        </div>
-
-        <div id="dynamic-content" class="tutorial-section">
-            <!-- Dynamic content -->
-        </div>
-
-        <div id="troubleshooting" class="tutorial-section">
-            <!-- Help content -->
         </div>
 
         <div id="test-runner" class="tutorial-section">

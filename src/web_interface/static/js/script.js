@@ -58,37 +58,68 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
         const data = await response.json();
         
         if (data.success) {
-            // Update structure info
-            const structureInfo = document.querySelector('.structure-info');
-            if (structureInfo) {
-                structureInfo.innerHTML = `
-                    <div class="structure-item">
-                        <h4>Forms</h4>
-                        <p>${data.analysis.structure.forms.length} detected</p>
-                        <small>${data.analysis.structure.forms.reduce((acc, form) => acc + form.inputs.length, 0)} total inputs</small>
+            // Update page statistics
+            const statsContainer = document.querySelector('.stats-container');
+            if (statsContainer && data.analysis.structure.page_metrics) {
+                const metrics = data.analysis.structure.page_metrics;
+                statsContainer.innerHTML = `
+                    <div class="metric">
+                        <span class="label">Load Time:</span>
+                        <span class="value">${metrics.load_time}s</span>
                     </div>
-                    <div class="structure-item">
-                        <h4>Navigation</h4>
-                        <p>${data.analysis.structure.navigation.length} elements</p>
-                        <small>${data.analysis.structure.navigation.reduce((acc, nav) => acc + nav.items.length, 0)} total links</small>
-                    </div>
-                    <div class="structure-item">
-                        <h4>Dynamic Content</h4>
-                        <p class="${data.analysis.structure.dynamic_content.infinite_scroll || data.analysis.structure.dynamic_content.load_more ? 'feature-detected' : 'feature-not-detected'}">
-                            ${data.analysis.structure.dynamic_content.infinite_scroll ? '✓ Infinite Scroll' : ''}
-                            ${data.analysis.structure.dynamic_content.load_more ? '✓ Load More' : ''}
-                            ${!data.analysis.structure.dynamic_content.infinite_scroll && !data.analysis.structure.dynamic_content.load_more ? '✗ Not Detected' : ''}
-                        </p>
-                    </div>
-                    <div class="structure-item">
-                        <h4>Page Metrics</h4>
-                        <p>Load Time: ${data.analysis.structure.page_metrics.load_time}s</p>
-                        <div class="metrics-details">
-                            <small>Images: ${data.analysis.structure.page_metrics.element_counts.images}</small>
-                            <small>Links: ${data.analysis.structure.page_metrics.element_counts.links}</small>
-                            <small>Buttons: ${data.analysis.structure.page_metrics.element_counts.buttons}</small>
+                    ${Object.entries(metrics.element_counts).map(([type, count]) => `
+                        <div class="metric">
+                            <span class="label">${type.replace('_', ' ')}:</span>
+                            <span class="value">${count}</span>
                         </div>
+                    `).join('')}
+                `;
+            }
+
+            // Update forms found
+            const formsContainer = document.querySelector('.forms-container');
+            if (formsContainer && data.analysis.structure.forms) {
+                formsContainer.innerHTML = data.analysis.structure.forms.map(form => `
+                    <div class="form-info">
+                        <h5>${form.id}</h5>
+                        <p>Method: ${form.method}</p>
+                        <p>Inputs: ${form.inputs.length}</p>
+                        <ul>
+                            ${form.inputs.map(input => `
+                                <li>${input.type}${input.required ? ' (required)' : ''}</li>
+                            `).join('')}
+                        </ul>
                     </div>
+                `).join('') || '<p>No forms found</p>';
+            }
+
+            // Update navigation structure
+            const navContainer = document.querySelector('.navigation-container');
+            if (navContainer && data.analysis.structure.navigation) {
+                navContainer.innerHTML = data.analysis.structure.navigation.map(nav => `
+                    <div class="nav-info">
+                        <h5>${nav.type} Navigation</h5>
+                        <ul>
+                            ${nav.items.map(item => `
+                                <li>${item.text} (${item.href})</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `).join('') || '<p>No navigation structure found</p>';
+            }
+
+            // Update dynamic content section
+            const dynamicContainer = document.querySelector('.dynamic-container');
+            if (dynamicContainer && data.analysis.structure.dynamic_content) {
+                const dynamic = data.analysis.structure.dynamic_content;
+                dynamicContainer.innerHTML = `
+                    <ul>
+                        ${dynamic.infinite_scroll ? '<li>✅ Infinite scroll detected</li>' : ''}
+                        ${dynamic.load_more ? '<li>✅ Load more functionality detected</li>' : ''}
+                        ${dynamic.auto_refresh ? '<li>✅ Auto refresh functionality detected</li>' : ''}
+                        ${!dynamic.infinite_scroll && !dynamic.load_more && !dynamic.auto_refresh ?
+                            '<li>No dynamic content features detected</li>' : ''}
+                    </ul>
                 `;
             }
 
