@@ -1,329 +1,308 @@
 """
-Scraping Analyzer module for analyzing webpage structure and identifying useful elements for scraping.
-
-This module provides detailed analysis of HTML elements, tags, and their relationships
-to assist in web scraping tasks.
+Scraping Analyzer module for analyzing webpage structure for scraping purposes.
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List, Optional
+import logging
 from bs4 import BeautifulSoup
-from collections import defaultdict
-import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-import json
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
+import re
+import time
 
 class ScrapingAnalyzer:
-    """Analyzes webpage structure for scraping purposes."""
-
     def __init__(self, driver: webdriver.Remote):
         self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+        self.logger = logging.getLogger(__name__)
+        self.page_source = None
         self.soup = None
-        self.tag_stats = defaultdict(int)
-        self.class_stats = defaultdict(int)
-        self.id_stats = defaultdict(int)
-        self.repeated_patterns = []
-        self.data_attributes = []
-        self.common_selectors = []
-        self.text_content_patterns = []
 
-    def analyze_page(self, url: str = None) -> Dict:
-        """
-        Analyze the current page or navigate to URL first.
-        
-        Args:
-            url: Optional URL to analyze
-            
-        Returns:
-            Dict containing analysis results
-        """
-        if url:
-            self.driver.get(url)
-        
-        # Get page source after JavaScript execution
-        page_source = self.driver.execute_script("return document.documentElement.outerHTML")
-        self.soup = BeautifulSoup(page_source, 'lxml')
-        
-        # Perform various analyses
-        self._analyze_tags()
-        self._analyze_classes()
-        self._analyze_ids()
-        self._find_repeated_patterns()
-        self._analyze_data_attributes()
-        self._generate_selectors()
-        self._analyze_text_patterns()
-        
-        return self._generate_report()
+    def analyze_page(self, url: str) -> Dict:
+        """Analyze webpage for scraping opportunities."""
+        try:
+            self.logger.info(f"Starting scraping analysis of {url}")
 
-    def _analyze_tags(self):
-        """Analyze HTML tags and their frequency."""
-        for tag in self.soup.find_all():
-            self.tag_stats[tag.name] += 1
+            # Load page with error handling
+            try:
+                self.driver.get(url)
+                self.wait.until(
+                    lambda d: d.execute_script('return document.readyState') == 'complete'
+                )
+            except TimeoutException:
+                self.logger.warning("Page load timed out, proceeding with partial analysis")
+            except WebDriverException as e:
+                self.logger.error(f"WebDriver error: {str(e)}")
+                raise
 
-    def _analyze_classes(self):
-        """Analyze CSS classes and their usage."""
-        for tag in self.soup.find_all(class_=True):
-            for class_name in tag.get('class', []):
-                self.class_stats[class_name] += 1
+            # Parse page content safely
+            try:
+                self.page_source = self.driver.page_source
+                self.soup = BeautifulSoup(self.page_source, 'lxml')
+            except Exception as e:
+                self.logger.error(f"Error parsing page source: {str(e)}")
+                raise
 
-    def _analyze_ids(self):
-        """Analyze element IDs."""
-        for tag in self.soup.find_all(id=True):
-            self.id_stats[tag['id']] += 1
+            # Perform analysis with error handling
+            try:
+                page_structure = self._analyze_page_structure()
+                recommended_selectors = self._generate_selectors()
 
-    def _find_repeated_patterns(self):
-        """Find repeated element patterns that might indicate lists or grids."""
-        # Look for parent elements with multiple similar children
-        for tag in self.soup.find_all():
-            children = tag.find_all(recursive=False)
-            if len(children) >= 3:  # At least 3 similar items
-                first_child = children[0]
-                similar_children = [
-                    c for c in children[1:]
-                    if c.name == first_child.name and 
-                    set(c.get('class', [])) == set(first_child.get('class', []))
-                ]
-                
-                if len(similar_children) >= 2:
-                    self.repeated_patterns.append({
-                        'parent': self._get_element_description(tag),
-                        'pattern': self._get_element_description(first_child),
-                        'count': len(similar_children) + 1,
-                        'selector': self._generate_selector(first_child)
+                return {
+                    'page_structure': page_structure,
+                    'recommended_selectors': recommended_selectors
+                }
+            except Exception as e:
+                self.logger.error(f"Error in page analysis: {str(e)}")
+                raise
+
+        except Exception as e:
+            self.logger.error(f"Error analyzing webpage: {str(e)}")
+            raise
+
+    def _analyze_page_structure(self) -> Dict:
+        """Analyze page structure with error handling."""
+        structure = {
+            'tags': {},
+            'repeated_patterns': [],
+            'data_attributes': [],
+            'common_classes': {}
+        }
+
+        try:
+            # Count tags
+            for tag in self.soup.find_all():
+                tag_name = tag.name
+                structure['tags'][tag_name] = structure['tags'].get(tag_name, 0) + 1
+
+            # Find repeated patterns
+            self._find_repeated_patterns(structure)
+
+            # Analyze data attributes
+            self._analyze_data_attributes(structure)
+
+            # Find common classes
+            self._analyze_common_classes(structure)
+
+        except Exception as e:
+            self.logger.error(f"Error analyzing page structure: {str(e)}")
+
+        return structure
+
+    def _find_repeated_patterns(self, structure: Dict) -> None:
+        """Find repeated element patterns safely."""
+        try:
+            # Look for common list patterns
+            lists = self.soup.find_all(['ul', 'ol'])
+            for lst in lists:
+                if len(lst.find_all('li')) > 2:
+                    structure['repeated_patterns'].append({
+                        'type': 'list',
+                        'selector': self._get_unique_selector(lst),
+                        'items': len(lst.find_all('li'))
                     })
 
-    def _analyze_data_attributes(self):
-        """Find and analyze data attributes that might contain useful information."""
-        for tag in self.soup.find_all():
-            data_attrs = {
-                attr: tag[attr] for attr in tag.attrs
-                if attr.startswith('data-')
+            # Look for grid/card patterns
+            common_containers = self.soup.find_all(['div', 'section'])
+            for container in common_containers:
+                children = container.find_all(recursive=False)
+                if len(children) > 2:
+                    similar_children = self._check_similar_structure(children)
+                    if similar_children:
+                        structure['repeated_patterns'].append({
+                            'type': 'grid',
+                            'selector': self._get_unique_selector(container),
+                            'items': len(children)
+                        })
+
+        except Exception as e:
+            self.logger.warning(f"Error finding repeated patterns: {str(e)}")
+
+    def _analyze_data_attributes(self, structure: Dict) -> None:
+        """Analyze data attributes safely."""
+        try:
+            for tag in self.soup.find_all():
+                for attr in tag.attrs:
+                    if attr.startswith('data-'):
+                        if attr not in structure['data_attributes']:
+                            structure['data_attributes'].append(attr)
+
+        except Exception as e:
+            self.logger.warning(f"Error analyzing data attributes: {str(e)}")
+
+    def _analyze_common_classes(self, structure: Dict) -> None:
+        """Analyze common classes safely."""
+        try:
+            class_count = {}
+            for tag in self.soup.find_all(class_=True):
+                for class_name in tag.get('class', []):
+                    class_count[class_name] = class_count.get(class_name, 0) + 1
+
+            # Filter for commonly used classes
+            structure['common_classes'] = {
+                cls: count for cls, count in class_count.items()
+                if count > 2  # Classes used more than twice
             }
-            if data_attrs:
-                self.data_attributes.append({
-                    'element': self._get_element_description(tag),
-                    'attributes': data_attrs,
-                    'selector': self._generate_selector(tag)
-                })
 
-    def _generate_selectors(self):
-        """Generate useful CSS selectors for common elements."""
-        # Find elements that might contain valuable data
-        valuable_elements = []
-        
-        # Links with specific patterns
-        for a in self.soup.find_all('a', href=True):
-            href = a['href']
-            if re.search(r'/(product|item|article|post)/\d+', href):
-                valuable_elements.append(('link', a))
+        except Exception as e:
+            self.logger.warning(f"Error analyzing common classes: {str(e)}")
 
-        # Tables with data
-        for table in self.soup.find_all('table'):
-            if table.find('th') or table.find('td'):
-                valuable_elements.append(('table', table))
-
-        # Lists that might contain data
-        for ul in self.soup.find_all(['ul', 'ol']):
-            if len(ul.find_all('li')) >= 3:
-                valuable_elements.append(('list', ul))
-
-        # Generate selectors for valuable elements
-        for element_type, element in valuable_elements:
-            self.common_selectors.append({
-                'type': element_type,
-                'selector': self._generate_selector(element),
-                'sample_content': self._get_sample_content(element)
-            })
-
-    def _analyze_text_patterns(self):
-        """Analyze text content patterns."""
-        # Look for common text patterns
-        patterns = {
-            'price': r'\$\d+\.?\d*|\d+\.?\d*\s*€|£\d+\.?\d*',
-            'date': r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}-\d{2}-\d{2}',
-            'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-            'phone': r'\+?\d{1,3}[-.]?\d{3}[-.]?\d{3,4}[-.]?\d{4}',
-            'url': r'https?://[^\s<>"]+|www\.[^\s<>"]+',
-        }
-
-        for pattern_name, pattern in patterns.items():
-            elements_with_pattern = self.soup.find_all(
-                string=re.compile(pattern)
-            )
-            if elements_with_pattern:
-                self.text_content_patterns.append({
-                    'type': pattern_name,
-                    'count': len(elements_with_pattern),
-                    'sample': str(elements_with_pattern[0]),
-                    'elements': [
-                        self._get_element_description(elem.parent)
-                        for elem in elements_with_pattern[:5]
-                    ]
-                })
-
-    def _get_element_description(self, element) -> Dict:
-        """Get a readable description of an element."""
-        return {
-            'tag': element.name,
-            'classes': element.get('class', []),
-            'id': element.get('id', ''),
-            'text_sample': element.get_text()[:50] if element.get_text() else ''
-        }
-
-    def _generate_selector(self, element) -> str:
-        """Generate a unique CSS selector for an element."""
-        if element.get('id'):
-            return f"#{element['id']}"
-        
-        classes = element.get('class', [])
-        if classes:
-            return f"{element.name}.{'.'.join(classes)}"
-        
-        # Generate path based on parent structure
-        path = []
-        for parent in element.parents:
-            if parent.name == '[document]':
-                break
-            if parent.get('id'):
-                path.append(f"#{parent['id']}")
-                break
-            if parent.get('class'):
-                path.append(f"{parent.name}.{'.'.join(parent.get('class', []))}")
-            else:
-                path.append(parent.name)
-        
-        path.reverse()
-        return ' > '.join(path + [element.name])
-
-    def _get_sample_content(self, element) -> str:
-        """Get a sample of the element's content."""
-        text = element.get_text(strip=True)
-        return text[:100] + '...' if len(text) > 100 else text
-
-    def _generate_report(self) -> Dict:
-        """Generate a comprehensive analysis report."""
-        return {
-            'page_structure': {
-                'tags': dict(sorted(
-                    self.tag_stats.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )),
-                'classes': dict(sorted(
-                    self.class_stats.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:20]),  # Top 20 most used classes
-                'ids': dict(self.id_stats)
-            },
-            'repeated_patterns': self.repeated_patterns,
-            'data_attributes': self.data_attributes,
-            'useful_selectors': self.common_selectors,
-            'content_patterns': self.text_content_patterns,
-            'recommended_selectors': self._generate_recommended_selectors()
-        }
-
-    def _generate_recommended_selectors(self) -> List[Dict]:
-        """Generate recommended selectors for scraping."""
-        recommendations = []
-        
-        # For repeated patterns (lists, grids)
-        if self.repeated_patterns:
-            for pattern in self.repeated_patterns:
-                recommendations.append({
-                    'purpose': 'List/Grid Items',
-                    'selector': pattern['selector'],
-                    'count': pattern['count'],
-                    'note': 'Repeated element pattern - good for scraping lists of items'
-                })
-
-        # For data attributes
-        if self.data_attributes:
-            for data_attr in self.data_attributes:
-                recommendations.append({
-                    'purpose': 'Data Container',
-                    'selector': data_attr['selector'],
-                    'attributes': list(data_attr['attributes'].keys()),
-                    'note': 'Contains structured data in attributes'
-                })
-
-        # For text patterns
-        for pattern in self.text_content_patterns:
-            if pattern['elements']:
-                recommendations.append({
-                    'purpose': f'Extract {pattern["type"]}',
-                    'selector': self._generate_selector(
-                        BeautifulSoup(pattern['elements'][0]['text_sample'], 'lxml')
-                    ),
-                    'count': pattern['count'],
-                    'note': f'Contains {pattern["type"]} data'
-                })
-
-        return recommendations
-
-    def get_html_visualization(self) -> str:
-        """Generate an HTML visualization of the analysis."""
-        html = """
-        <div class="scraping-analysis">
-            <h3>Page Structure Overview</h3>
-            <div class="tag-cloud">
-                {}
-            </div>
+    def _generate_selectors(self) -> List[Dict]:
+        """Generate recommended CSS selectors safely."""
+        selectors = []
+        try:
+            # Handle lists
+            self._generate_list_selectors(selectors)
             
-            <h3>Recommended Selectors</h3>
-            <div class="selectors-list">
-                {}
-            </div>
+            # Handle forms
+            self._generate_form_selectors(selectors)
             
-            <h3>Content Patterns</h3>
-            <div class="patterns-list">
-                {}
-            </div>
-        </div>
-        """.format(
-            self._generate_tag_cloud(),
-            self._generate_selectors_html(),
-            self._generate_patterns_html()
-        )
-        
-        return html
+            # Handle tables
+            self._generate_table_selectors(selectors)
+            
+            # Handle common containers
+            self._generate_container_selectors(selectors)
 
-    def _generate_tag_cloud(self) -> str:
-        """Generate HTML for tag usage visualization."""
-        max_size = max(self.tag_stats.values())
-        tags_html = []
-        
-        for tag, count in sorted(self.tag_stats.items(), key=lambda x: x[1], reverse=True):
-            size = 1 + (count / max_size) * 2
-            tags_html.append(
-                f'<span class="tag" style="font-size: {size}em">'
-                f'{tag} ({count})</span>'
+        except Exception as e:
+            self.logger.error(f"Error generating selectors: {str(e)}")
+
+        return selectors
+
+    def _generate_list_selectors(self, selectors: List) -> None:
+        """Generate selectors for lists safely."""
+        try:
+            lists = self.soup.find_all(['ul', 'ol'])
+            for lst in lists:
+                if len(lst.find_all('li')) > 2:
+                    selector = self._get_unique_selector(lst)
+                    if selector:
+                        selectors.append({
+                            'purpose': 'List Items',
+                            'selector': f"{selector} > li",
+                            'note': f"Found {len(lst.find_all('li'))} items"
+                        })
+        except Exception as e:
+            self.logger.warning(f"Error generating list selectors: {str(e)}")
+
+    def _generate_form_selectors(self, selectors: List) -> None:
+        """Generate selectors for forms safely."""
+        try:
+            forms = self.soup.find_all('form')
+            for form in forms:
+                selector = self._get_unique_selector(form)
+                if selector:
+                    selectors.append({
+                        'purpose': 'Form Fields',
+                        'selector': f"{selector} input, {selector} select, {selector} textarea",
+                        'note': "Form input fields"
+                    })
+        except Exception as e:
+            self.logger.warning(f"Error generating form selectors: {str(e)}")
+
+    def _generate_table_selectors(self, selectors: List) -> None:
+        """Generate selectors for tables safely."""
+        try:
+            tables = self.soup.find_all('table')
+            for table in tables:
+                selector = self._get_unique_selector(table)
+                if selector:
+                    selectors.append({
+                        'purpose': 'Table Data',
+                        'selector': f"{selector} tr",
+                        'note': "Table rows"
+                    })
+        except Exception as e:
+            self.logger.warning(f"Error generating table selectors: {str(e)}")
+
+    def _generate_container_selectors(self, selectors: List) -> None:
+        """Generate selectors for common containers safely."""
+        try:
+            # Look for article containers
+            articles = self.soup.find_all('article')
+            if articles:
+                selectors.append({
+                    'purpose': 'Article Content',
+                    'selector': 'article',
+                    'note': f"Found {len(articles)} articles"
+                })
+
+            # Look for card-like containers
+            cards = self.soup.find_all(class_=re.compile(r'card|item|product'))
+            if cards:
+                selectors.append({
+                    'purpose': 'Content Cards',
+                    'selector': '.' + cards[0].get('class')[0],
+                    'note': f"Found {len(cards)} card elements"
+                })
+
+        except Exception as e:
+            self.logger.warning(f"Error generating container selectors: {str(e)}")
+
+    def _get_unique_selector(self, element) -> str:
+        """Generate a unique CSS selector for an element safely."""
+        try:
+            # Try ID first
+            if element.get('id'):
+                return f"#{element['id']}"
+
+            # Try unique class combination
+            classes = element.get('class', [])
+            if classes:
+                class_selector = '.'.join(classes)
+                if len(self.soup.select(f'.{class_selector}')) == 1:
+                    return f'.{class_selector}'
+
+            # Build path-based selector
+            path = []
+            current = element
+            for _ in range(3):  # Limit depth to avoid too complex selectors
+                if not current.parent:
+                    break
+                siblings = current.parent.find_all(current.name, recursive=False)
+                if len(siblings) == 1:
+                    path.append(current.name)
+                else:
+                    index = siblings.index(current) + 1
+                    path.append(f"{current.name}:nth-child({index})")
+                current = current.parent
+                if current.get('id'):
+                    path.append(f"#{current['id']}")
+                    break
+
+            return ' > '.join(reversed(path))
+
+        except Exception as e:
+            self.logger.warning(f"Error generating unique selector: {str(e)}")
+            return ""
+
+    def _check_similar_structure(self, elements) -> bool:
+        """Check if elements have similar structure safely."""
+        try:
+            if len(elements) < 2:
+                return False
+
+            # Get tag structure of first element
+            first_structure = self._get_element_structure(elements[0])
+            
+            # Compare with other elements
+            return all(
+                self._get_element_structure(elem) == first_structure
+                for elem in elements[1:]
             )
-        
-        return ' '.join(tags_html)
 
-    def _generate_selectors_html(self) -> str:
-        """Generate HTML for recommended selectors."""
-        html = []
-        for rec in self._generate_recommended_selectors():
-            html.append(f"""
-                <div class="selector-item">
-                    <div class="purpose">{rec['purpose']}</div>
-                    <code class="selector">{rec['selector']}</code>
-                    <div class="note">{rec['note']}</div>
-                </div>
-            """)
-        return ''.join(html)
+        except Exception as e:
+            self.logger.warning(f"Error checking element structure: {str(e)}")
+            return False
 
-    def _generate_patterns_html(self) -> str:
-        """Generate HTML for content patterns."""
-        html = []
-        for pattern in self.text_content_patterns:
-            html.append(f"""
-                <div class="pattern-item">
-                    <div class="type">{pattern['type']}</div>
-                    <div class="sample">{pattern['sample']}</div>
-                    <div class="count">Found {pattern['count']} instances</div>
-                </div>
-            """)
-        return ''.join(html)
+    def _get_element_structure(self, element) -> str:
+        """Get string representation of element structure safely."""
+        try:
+            return ''.join(
+                child.name for child in element.find_all(recursive=False)
+            )
+        except Exception as e:
+            self.logger.warning(f"Error getting element structure: {str(e)}")
+            return ""
