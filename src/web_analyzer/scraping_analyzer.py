@@ -13,6 +13,8 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 import re
 import time
 
+from src.web_analyzer.services.analysis_service import WebAnalysisService
+
 class ScrapingAnalyzer:
     def __init__(self, driver: webdriver.Remote):
         self.driver = driver
@@ -20,48 +22,135 @@ class ScrapingAnalyzer:
         self.logger = logging.getLogger(__name__)
         self.page_source = None
         self.soup = None
+        # Initialize the enhanced analysis service
+        self.analysis_service = WebAnalysisService(driver)
 
     def analyze_page(self, url: str) -> Dict:
-        """Analyze webpage for scraping opportunities."""
+        """
+        Analyze webpage for scraping opportunities using enhanced analysis service.
+        Maintains backward compatibility while providing enhanced analysis.
+        """
         try:
-            self.logger.info(f"Starting scraping analysis of {url}")
-
-            # Load page with error handling
-            try:
-                self.driver.get(url)
-                self.wait.until(
-                    lambda d: d.execute_script('return document.readyState') == 'complete'
-                )
-            except TimeoutException:
-                self.logger.warning("Page load timed out, proceeding with partial analysis")
-            except WebDriverException as e:
-                self.logger.error(f"WebDriver error: {str(e)}")
-                raise
-
-            # Parse page content safely
-            try:
-                self.page_source = self.driver.page_source
-                self.soup = BeautifulSoup(self.page_source, 'lxml')
-            except Exception as e:
-                self.logger.error(f"Error parsing page source: {str(e)}")
-                raise
-
-            # Perform analysis with error handling
-            try:
-                page_structure = self._analyze_page_structure()
-                recommended_selectors = self._generate_selectors()
-
-                return {
-                    'page_structure': page_structure,
-                    'recommended_selectors': recommended_selectors
-                }
-            except Exception as e:
-                self.logger.error(f"Error in page analysis: {str(e)}")
-                raise
-
+            self.logger.info(f"Starting enhanced scraping analysis of {url}")
+            
+            # Use enhanced analysis service
+            analysis_result = self.analysis_service.analyze_page(url)
+            
+            # Update instance variables for backward compatibility
+            self.page_source = self.driver.page_source
+            self.soup = BeautifulSoup(self.page_source, 'lxml')
+            
+            # Transform enhanced analysis into original format
+            return self._transform_analysis_result(analysis_result)
+            
         except Exception as e:
             self.logger.error(f"Error analyzing webpage: {str(e)}")
             raise
+
+    def _transform_analysis_result(self, enhanced_result: Dict) -> Dict:
+        """Transform enhanced analysis result to maintain backward compatibility."""
+        try:
+            # Extract relevant data from enhanced analysis
+            tag_analysis = enhanced_result.get('tag_analysis', {})
+            structure_analysis = enhanced_result.get('structure_analysis', {})
+            
+            # Create backward-compatible structure
+            page_structure = {
+                'tags': tag_analysis.get('tag_patterns', {}).get('counts', {}),
+                'repeated_patterns': self._extract_repeated_patterns(tag_analysis),
+                'data_attributes': self._extract_data_attributes(tag_analysis),
+                'common_classes': self._extract_common_classes(tag_analysis)
+            }
+            
+            # Create backward-compatible selectors
+            recommended_selectors = self._extract_selectors(
+                enhanced_result.get('element_suggestions', [])
+            )
+            
+            return {
+                'page_structure': page_structure,
+                'recommended_selectors': recommended_selectors
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error transforming analysis result: {str(e)}")
+            return {
+                'page_structure': self._analyze_page_structure(),  # Fallback to original
+                'recommended_selectors': self._generate_selectors()  # Fallback to original
+            }
+
+    def _extract_repeated_patterns(self, tag_analysis: Dict) -> List[Dict]:
+        """Extract repeated patterns from enhanced analysis."""
+        patterns = []
+        
+        # Extract list patterns
+        for list_pattern in tag_analysis.get('tag_patterns', {}).get('lists', []):
+            if list_pattern.get('items', 0) > 2:
+                patterns.append({
+                    'type': 'list',
+                    'selector': f"{list_pattern.get('type', 'ul')}",
+                    'items': list_pattern.get('items', 0)
+                })
+        
+        # Extract grid patterns
+        for grid_pattern in tag_analysis.get('tag_patterns', {}).get('grids', []):
+            patterns.append({
+                'type': 'grid',
+                'selector': grid_pattern.get('selector', ''),
+                'items': grid_pattern.get('children_count', 0)
+            })
+            
+        return patterns
+
+    def _extract_data_attributes(self, tag_analysis: Dict) -> List[str]:
+        """Extract data attributes from enhanced analysis."""
+        attributes = []
+        key_attributes = tag_analysis.get('key_attributes', {})
+        data_attrs = key_attributes.get('data_attributes', {})
+        
+        for attr in data_attrs:
+            if attr.startswith('data-'):
+                attributes.append(attr)
+                
+        return attributes
+
+    def _extract_common_classes(self, tag_analysis: Dict) -> Dict[str, int]:
+        """Extract common classes from enhanced analysis."""
+        classes = {}
+        class_patterns = tag_analysis.get('key_attributes', {}).get('class_patterns', {})
+        
+        # Filter for commonly used classes (used more than twice)
+        return {
+            cls: count for cls, count in class_patterns.items()
+            if count > 2
+        }
+
+    def _extract_selectors(self, suggestions: List[Dict]) -> List[Dict]:
+        """Convert enhanced suggestions to backward-compatible selectors."""
+        selectors = []
+        
+        for suggestion in suggestions:
+            selector_type = suggestion.get('type', '')
+            if selector_type == 'list':
+                selectors.append({
+                    'purpose': 'List Items',
+                    'selector': f"{suggestion.get('selector', '')} > li",
+                    'note': suggestion.get('description', 'List elements')
+                })
+            elif selector_type == 'form':
+                selectors.append({
+                    'purpose': 'Form Fields',
+                    'selector': suggestion.get('selector', ''),
+                    'note': suggestion.get('description', 'Form elements')
+                })
+            elif selector_type == 'grid':
+                selectors.append({
+                    'purpose': 'Grid Items',
+                    'selector': suggestion.get('selector', ''),
+                    'note': suggestion.get('description', 'Grid elements')
+                })
+                
+        return selectors
 
     def _analyze_page_structure(self) -> Dict:
         """Analyze page structure with error handling."""

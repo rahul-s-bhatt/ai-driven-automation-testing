@@ -1,0 +1,111 @@
+# Enhanced Test Scenarios demonstrating improved capabilities
+
+- name: "Smart Form Analysis Test"
+  description: "Test improved form detection and interaction"
+  steps:
+    - action: "verify"
+      target: "login form"  # Uses semantic understanding to find form
+      description: "Check login form is present"
+
+    - action: "type"
+      target: "email field"  # Uses enhanced element finding
+      value: "test@example.com"
+      description: "Enter email using smart field detection"
+
+    - action: "type"
+      target: "password"  # Uses attribute analysis
+      value: "test123"
+      description: "Enter password using attribute matching"
+
+    - action: "click"
+      target: "sign in"  # Uses text content and semantic role
+      description: "Click sign in button using semantic meaning"
+
+    - action: "wait"
+      value: 2
+      description: "Wait for form submission"
+
+    - action: "verify"
+      target: "welcome message"  # Uses dynamic content detection
+      description: "Verify successful login"
+
+- name: "Dynamic Content Analysis Test"
+  description: "Test improved dynamic content handling"
+  steps:
+    - action: "scroll"
+      target: "content list"  # Uses structure analysis
+      description: "Scroll to dynamic content section"
+
+    - action: "wait"
+      value: 2
+      description: "Wait for content load"
+
+    - action: "verify"
+      target: "new items"  # Uses mutation tracking
+      description: "Verify new content loaded"
+
+    - action: "scroll"
+      target: "load more"  # Uses enhanced element finding
+      description: "Scroll to load more button"
+
+    - action: "click"
+      target: "load more"
+      description: "Click load more button"
+
+    - action: "verify"
+      target: "additional content"  # Uses dynamic content analysis
+      description: "Verify additional content loaded"
+
+- name: "Smart Navigation Test"
+  description: "Test improved navigation understanding"
+  steps:
+    - action: "verify"
+      target: "main menu"  # Uses semantic structure
+      description: "Check main navigation menu"
+
+    - action: "hover"
+      target: "products"  # Uses enhanced element finding
+      description: "Hover over products menu"
+
+    - action: "verify"
+      target: "dropdown menu"  # Uses dynamic content detection
+      description: "Verify dropdown appears"
+
+    - action: "click"
+      target: "first category"  # Uses smart element location
+      description: "Click first product category"
+
+    - action: "wait"
+      value: 2
+      description: "Wait for page load"
+
+    - action: "verify"
+      target: "product grid"  # Uses pattern recognition
+      description: "Verify products are displayed in grid"
+
+- name: "Enhanced Pattern Detection Test"
+  description: "Test improved pattern detection capabilities"
+  steps:
+    - action: "verify"
+      target: "product cards"  # Uses pattern recognition
+      description: "Check product card pattern"
+
+    - action: "scroll"
+      target: "end"  # Uses enhanced scrolling
+      description: "Scroll to end of product list"
+
+    - action: "wait"
+      value: 2
+      description: "Wait for infinite scroll"
+
+    - action: "verify"
+      target: "lazy loaded images"  # Uses dynamic content analysis
+      description: "Verify lazy loaded images appear"
+
+    - action: "hover"
+      target: "first product"  # Uses smart element location
+      description: "Hover over first product"
+
+    - action: "verify"
+      target: "quick view"  # Uses dynamic overlay detection
+      description: "Verify quick view overlay appears"

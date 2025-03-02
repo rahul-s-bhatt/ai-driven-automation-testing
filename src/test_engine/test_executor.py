@@ -102,28 +102,121 @@ class TestExecutor:
         return success, errors
 
     def _find_element(self, target: str, timeout: int = 10) -> webdriver.Remote:
-        """Find an element using structure analysis and multiple strategies."""
-        # First try structure-based selectors
-        if self.element_selectors:
-            try:
+        """Find an element using enhanced structure analysis and smart strategies."""
+        try:
+            # First try enhanced structure-based selectors
+            if self.structure_analysis:
+                element = self._find_with_enhanced_analysis(target, timeout)
+                if element:
+                    return element
+
+            # Then try semantic meaning
+            element = self._find_by_semantic_meaning(target, timeout)
+            if element:
+                return element
+
+            # Then try original structure-based selectors
+            if self.element_selectors:
                 if selector := self._get_structure_based_selector(target):
+                    try:
+                        return self.wait.until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                        )
+                    except TimeoutException:
+                        pass
+
+            # Finally fallback to multiple strategies
+            return self._find_with_fallback_strategies(target, timeout)
+
+        except Exception as e:
+            self.logger.error(f"Error finding element '{target}': {str(e)}")
+            raise NoSuchElementException(f"Could not find element: {target}")
+
+    def _find_with_enhanced_analysis(self, target: str, timeout: int) -> Optional[webdriver.Remote]:
+        """Find element using enhanced structure analysis."""
+        try:
+            # Get element suggestions from structure analysis
+            suggested_selectors = []
+            if 'suggested_selectors' in self.structure_analysis:
+                for selector_info in self.structure_analysis['suggested_selectors']:
+                    if any(keyword in target.lower() for keyword in selector_info.get('keywords', [])):
+                        suggested_selectors.append(selector_info['selector'])
+
+            # Try each suggested selector
+            for selector in suggested_selectors:
+                try:
                     return self.wait.until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )
-            except TimeoutException:
-                pass
+                except TimeoutException:
+                    continue
 
-        # Fallback to multiple strategies
+            return None
+        except Exception as e:
+            self.logger.debug(f"Enhanced analysis search failed: {str(e)}")
+            return None
+
+    def _find_by_semantic_meaning(self, target: str, timeout: int) -> Optional[webdriver.Remote]:
+        """Find element by semantic meaning using ARIA roles and labels."""
+        semantic_strategies = [
+            # By ARIA role
+            (By.CSS_SELECTOR, f'[role="{target.lower()}"]'),
+            (By.CSS_SELECTOR, f'[role="button"][aria-label*="{target}"]'),
+            
+            # By ARIA label
+            (By.CSS_SELECTOR, f'[aria-label*="{target}"]'),
+            (By.CSS_SELECTOR, f'[aria-describedby*="{target}"]'),
+            
+            # By semantic HTML5 elements
+            (By.CSS_SELECTOR, f'{target.lower()}'),
+            (By.CSS_SELECTOR, f'nav[aria-label*="{target}"]'),
+            (By.CSS_SELECTOR, f'header[role="banner"]'),
+            
+            # By text content in semantic elements
+            (By.XPATH, f'//nav[contains(text(),"{target}")]'),
+            (By.XPATH, f'//header[contains(text(),"{target}")]'),
+            (By.XPATH, f'//footer[contains(text(),"{target}")]'),
+        ]
+
+        for by, selector in semantic_strategies:
+            try:
+                return self.wait.until(
+                    EC.presence_of_element_located((by, selector))
+                )
+            except TimeoutException:
+                continue
+
+        return None
+
+    def _find_with_fallback_strategies(self, target: str, timeout: int) -> webdriver.Remote:
+        """Find element using multiple fallback strategies."""
         strategies = [
+            # Standard attributes
             (By.ID, target),
             (By.NAME, target),
             (By.CLASS_NAME, target),
             (By.CSS_SELECTOR, target),
+            
+            # Text content
             (By.XPATH, f"//*[contains(text(), '{target}')]"),
+            (By.XPATH, f"//*[text()[normalize-space()='{target}']]"),
+            
+            # Button variations
             (By.XPATH, f"//button[contains(text(), '{target}')]"),
+            (By.XPATH, f"//button[@aria-label='{target}']"),
+            
+            # Input variations
             (By.XPATH, f"//input[@placeholder='{target}']"),
+            (By.XPATH, f"//input[@aria-label='{target}']"),
             (By.XPATH, f"//label[contains(text(), '{target}')]/..//input"),
+            
+            # Link variations
             (By.XPATH, f"//a[contains(text(), '{target}')]"),
+            (By.XPATH, f"//a[@aria-label='{target}']"),
+            
+            # Complex relationships
+            (By.XPATH, f"//label[contains(text(), '{target}')]/..//*[self::input or self::select or self::textarea]"),
+            (By.XPATH, f"//*[@aria-labelledby=//label[contains(text(), '{target}')]/@id]"),
         ]
 
         for by, selector in strategies:
