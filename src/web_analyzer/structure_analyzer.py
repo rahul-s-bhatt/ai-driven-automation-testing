@@ -25,10 +25,8 @@ class StructureAnalyzer:
             start_time = time.time()
             self.logger.info(f"Starting analysis of {url}")
 
-            # Load page with timeout and error handling
             try:
                 self.driver.get(url)
-                # Wait for page load with timeout
                 self.wait.until(
                     lambda d: d.execute_script('return document.readyState') == 'complete'
                 )
@@ -40,7 +38,6 @@ class StructureAnalyzer:
 
             load_time = time.time() - start_time
 
-            # Get page source safely
             try:
                 page_source = self.driver.page_source
                 soup = BeautifulSoup(page_source, 'lxml')
@@ -53,13 +50,15 @@ class StructureAnalyzer:
             navigation = self._analyze_navigation(soup)
             dynamic_content = self._analyze_dynamic_content()
             page_metrics = self._get_page_metrics(soup, load_time)
+            suggested_scenarios = self._generate_test_scenarios(soup, forms, navigation, dynamic_content)
 
             return {
                 'structure': {
                     'forms': forms,
                     'navigation': navigation,
                     'dynamic_content': dynamic_content,
-                    'page_metrics': page_metrics
+                    'page_metrics': page_metrics,
+                    'suggested_scenarios': suggested_scenarios
                 }
             }
 
@@ -67,162 +66,275 @@ class StructureAnalyzer:
             self.logger.error(f"Error analyzing website: {str(e)}")
             raise
 
-    def _analyze_forms(self, soup: BeautifulSoup) -> List[Dict]:
-        """Analyze form structures with error handling."""
-        forms = []
-        try:
-            for form in soup.find_all('form'):
-                try:
-                    form_data = {
-                        'action': form.get('action', ''),
-                        'method': form.get('method', 'get'),
-                        'inputs': [],
-                        'buttons': []
-                    }
-                    
-                    # Analyze inputs
-                    for input_tag in form.find_all(['input', 'select', 'textarea']):
-                        try:
-                            input_data = {
-                                'type': input_tag.get('type', 'text'),
-                                'name': input_tag.get('name', ''),
-                                'required': input_tag.get('required') is not None
-                            }
-                            form_data['inputs'].append(input_data)
-                        except Exception as e:
-                            self.logger.warning(f"Error analyzing input: {str(e)}")
-                            continue
-                    
-                    # Analyze buttons
-                    for button in form.find_all(['button', 'input[type="submit"]']):
-                        try:
-                            form_data['buttons'].append({
-                                'type': button.get('type', 'submit'),
-                                'text': button.text.strip() if button.text else button.get('value', '')
-                            })
-                        except Exception as e:
-                            self.logger.warning(f"Error analyzing button: {str(e)}")
-                            continue
-                    
-                    forms.append(form_data)
-                except Exception as e:
-                    self.logger.warning(f"Error analyzing form: {str(e)}")
-                    continue
-                    
-        except Exception as e:
-            self.logger.error(f"Error in form analysis: {str(e)}")
-            return []
+    def _generate_test_scenarios(self, soup: BeautifulSoup, forms: List[Dict], 
+                               navigation: List[Dict], dynamic_content: Dict) -> List[Dict]:
+        """Generate suggested test scenarios based on page analysis."""
+        scenarios = []
+
+        # Form testing scenarios
+        for form in forms:
+            form_scenario = {
+                'name': 'Form Interaction',
+                'description': f"Test form with {len(form['inputs'])} fields",
+                'steps': [
+                    'wait for 2 seconds'
+                ]
+            }
+            
+            # Add steps for each input
+            for input_field in form['inputs']:
+                if input_field['type'] in ['text', 'email', 'password']:
+                    form_scenario['steps'].append(
+                        f"type \"test\" into {input_field['name'] or input_field['type']} field"
+                    )
+                elif input_field['type'] == 'checkbox':
+                    form_scenario['steps'].append(
+                        f"click on {input_field['name'] or 'checkbox'}"
+                    )
+                elif input_field['type'] == 'select':
+                    form_scenario['steps'].append(
+                        f"select option from {input_field['name'] or 'dropdown'}"
+                    )
+
+            # Add submit step
+            if form['buttons']:
+                submit_button = next((b for b in form['buttons'] if b['type'] == 'submit'), None)
+                if submit_button:
+                    form_scenario['steps'].append(
+                        f"click on {submit_button['text'] or 'submit'} button"
+                    )
+                    form_scenario['steps'].append("wait for 2 seconds")
+                    form_scenario['steps'].append("verify that success message appears")
+
+            scenarios.append(form_scenario)
+
+        # Navigation testing scenarios
+        for nav in navigation:
+            if nav['items']:
+                nav_scenario = {
+                    'name': 'Navigation Flow',
+                    'description': f"Test {nav['type']} navigation with {len(nav['items'])} links",
+                    'steps': [
+                        'wait for 2 seconds'
+                    ]
+                }
+                
+                # Add steps for navigation items
+                for item in nav['items'][:3]:  # Test first 3 links
+                    nav_scenario['steps'].extend([
+                        f"click on {item['text']} link",
+                        "wait for 2 seconds",
+                        "verify that page loads",
+                        "go back",
+                        "wait for 2 seconds"
+                    ])
+
+                scenarios.append(nav_scenario)
+
+        # Dynamic content scenarios
+        if dynamic_content['infinite_scroll']:
+            scenarios.append({
+                'name': 'Infinite Scroll',
+                'description': 'Test infinite scroll functionality',
+                'steps': [
+                    'wait for 2 seconds',
+                    'scroll down till end',
+                    'wait for 2 seconds',
+                    'verify that new content appears',
+                    'scroll down till end',
+                    'wait for 2 seconds',
+                    'verify that more content appears'
+                ]
+            })
+
+        if dynamic_content['load_more']:
+            scenarios.append({
+                'name': 'Load More Content',
+                'description': 'Test load more functionality',
+                'steps': [
+                    'wait for 2 seconds',
+                    'click on load more button',
+                    'wait for 2 seconds',
+                    'verify that new items appear'
+                ]
+            })
+
+        # Search functionality scenario (if found)
+        search_form = soup.find('form', {'role': 'search'}) or soup.find('input', {'type': 'search'})
+        if search_form:
+            scenarios.append({
+                'name': 'Search Functionality',
+                'description': 'Test search feature',
+                'steps': [
+                    'wait for 2 seconds',
+                    'type "test" into search field',
+                    'press enter key',
+                    'wait for 2 seconds',
+                    'verify that search results appear'
+                ]
+            })
+
+        # Login/Signup scenarios (if found)
+        login_link = soup.find('a', text=re.compile(r'login|sign in', re.I))
+        if login_link:
+            scenarios.append({
+                'name': 'Login Flow',
+                'description': 'Test login functionality',
+                'steps': [
+                    'wait for 2 seconds',
+                    'click on login link',
+                    'wait for 2 seconds',
+                    'type "test@example.com" into email field',
+                    'type "password123" into password field',
+                    'click on login button',
+                    'wait for 2 seconds',
+                    'verify that login succeeds'
+                ]
+            })
+
+        # Add responsiveness test scenario
+        scenarios.append({
+            'name': 'Responsive Design',
+            'description': 'Test responsive layout',
+            'steps': [
+                'wait for 2 seconds',
+                'set viewport size to mobile',
+                'wait for 2 seconds',
+                'verify that layout adjusts',
+                'set viewport size to tablet',
+                'wait for 2 seconds',
+                'verify that layout adjusts',
+                'set viewport size to desktop',
+                'wait for 2 seconds',
+                'verify that layout adjusts'
+            ]
+        })
+
+        return scenarios
+
+    def _analyze_forms(self, soup):
+        """
+        Analyze form elements in the webpage.
         
-        return forms
+        Args:
+            soup (BeautifulSoup): The BeautifulSoup object of the webpage
+            
+        Returns:
+            list: List of dictionaries containing form information
+        """
+        forms_data = []
+        forms = soup.find_all('form')
+        
+        for i, form in enumerate(forms):
+            form_data = {
+                'id': form.get('id', f'form_{i+1}'),
+                'method': form.get('method', 'get').upper(),
+                'action': form.get('action', ''),
+                'inputs': []
+            }
+            
+            # Analyze inputs
+            inputs = form.find_all(['input', 'textarea', 'select'])
+            for input_elem in inputs:
+                input_type = input_elem.get('type', 'text') if input_elem.name == 'input' else input_elem.name
+                input_data = {
+                    'name': input_elem.get('name', ''),
+                    'id': input_elem.get('id', ''),
+                    'type': input_type,
+                    'required': input_elem.has_attr('required')
+                }
+                form_data['inputs'].append(input_data)
+                
+            # Analyze buttons
+            buttons = form.find_all(['button', 'input'])
+            button_types = ['submit', 'button', 'reset']
+            form_data['buttons'] = [
+                {
+                    'text': btn.text.strip() if btn.name == 'button' else btn.get('value', ''),
+                    'type': btn.get('type', 'submit') if btn.name == 'input' else btn.get('type', 'button')
+                }
+                for btn in buttons 
+                if (btn.name == 'button' or (btn.name == 'input' and btn.get('type') in button_types))
+            ]
+            
+            forms_data.append(form_data)
+        
+        return forms_data
 
     def _analyze_navigation(self, soup: BeautifulSoup) -> List[Dict]:
-        """Analyze navigation elements with error handling."""
-        nav_elements = []
-        try:
-            for nav in soup.find_all(['nav', 'header']):
-                try:
-                    nav_data = {
-                        'items': [],
-                        'type': 'primary' if 'main-nav' in nav.get('class', []) else 'secondary'
-                    }
-                    
-                    for link in nav.find_all('a'):
-                        try:
-                            nav_data['items'].append({
-                                'text': link.text.strip(),
-                                'href': link.get('href', '#'),
-                                'current': 'active' in link.get('class', [])
-                            })
-                        except Exception as e:
-                            self.logger.warning(f"Error analyzing navigation link: {str(e)}")
-                            continue
-                    
-                    nav_elements.append(nav_data)
-                except Exception as e:
-                    self.logger.warning(f"Error analyzing navigation element: {str(e)}")
-                    continue
-                    
-        except Exception as e:
-            self.logger.error(f"Error in navigation analysis: {str(e)}")
-            return []
+        """Analyze navigation elements in the webpage."""
+        navigation = []
         
-        return nav_elements
+        # Find main navigation
+        nav_elements = soup.find_all('nav')
+        for nav in nav_elements:
+            nav_data = {
+                'type': 'main' if nav.get('role') == 'navigation' else 'secondary',
+                'items': []
+            }
+            
+            # Analyze links
+            links = nav.find_all('a')
+            for link in links:
+                nav_data['items'].append({
+                    'text': link.text.strip(),
+                    'href': link.get('href', ''),
+                    'aria_label': link.get('aria-label', '')
+                })
+                
+            navigation.append(nav_data)
+        
+        return navigation
 
     def _analyze_dynamic_content(self) -> Dict:
-        """Analyze dynamic content loading with error handling."""
+        """Analyze dynamic content loading patterns."""
         dynamic_content = {
             'infinite_scroll': False,
-            'load_more': False
+            'load_more': False,
+            'auto_refresh': False
         }
-
+        
         try:
             # Check for infinite scroll
-            try:
-                initial_height = self.driver.execute_script("return document.body.scrollHeight")
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(2)  # Wait for potential content load
-                new_height = self.driver.execute_script("return document.body.scrollHeight")
-                
-                if new_height > initial_height:
-                    dynamic_content['infinite_scroll'] = True
-            except Exception as e:
-                self.logger.warning(f"Error checking infinite scroll: {str(e)}")
-
+            initial_height = self.driver.execute_script("return document.body.scrollHeight")
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(2)  # Wait for potential content load
+            new_height = self.driver.execute_script("return document.body.scrollHeight")
+            dynamic_content['infinite_scroll'] = new_height > initial_height
+            
             # Check for load more buttons
-            try:
-                load_more = self.driver.find_elements(By.XPATH, 
-                    "//*[contains(text(), 'Load More') or contains(text(), 'Show More')]")
-                if load_more:
-                    dynamic_content['load_more'] = True
-            except Exception as e:
-                self.logger.warning(f"Error checking load more buttons: {str(e)}")
-
+            load_more_buttons = self.driver.find_elements(By.XPATH, 
+                "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'load more') or contains(., '...') or contains(., 'show more')]")
+            dynamic_content['load_more'] = len(load_more_buttons) > 0
+            
         except Exception as e:
-            self.logger.error(f"Error in dynamic content analysis: {str(e)}")
-
+            self.logger.warning(f"Error during dynamic content analysis: {str(e)}")
+        
         return dynamic_content
 
     def _get_page_metrics(self, soup: BeautifulSoup, load_time: float) -> Dict:
-        """Get basic page metrics with error handling."""
+        """Calculate various page metrics."""
         metrics = {
             'load_time': round(load_time, 2),
-            'elements': {
+            'element_counts': {
                 'images': 0,
-                'scripts': 0,
-                'styles': 0,
-                'total': 0
-            },
-            'meta': {
-                'title': None,
-                'has_description': False,
-                'viewport': False
+                'links': 0,
+                'buttons': 0,
+                'forms': 0,
+                'input_fields': 0
             }
         }
-
-        try:
-            # Count elements
-            metrics['elements']['images'] = len(soup.find_all('img'))
-            metrics['elements']['scripts'] = len(soup.find_all('script'))
-            metrics['elements']['styles'] = len(soup.find_all('link', rel='stylesheet'))
-            metrics['elements']['total'] = len(soup.find_all())
-
-            # Get meta information
+        
+        if soup:
             try:
-                metrics['meta']['title'] = soup.title.string if soup.title else None
-            except:
-                pass
-
-            try:
-                metrics['meta']['has_description'] = bool(soup.find('meta', {'name': 'description'}))
-            except:
-                pass
-
-            try:
-                metrics['meta']['viewport'] = bool(soup.find('meta', {'name': 'viewport'}))
-            except:
-                pass
-
-        except Exception as e:
-            self.logger.error(f"Error getting page metrics: {str(e)}")
-
+                metrics['element_counts'] = {
+                    'images': len(soup.find_all('img') or []),
+                    'links': len(soup.find_all('a') or []),
+                    'buttons': len(soup.find_all('button') or []),
+                    'forms': len(soup.find_all('form') or []),
+                    'input_fields': len(soup.find_all('input') or [])
+                }
+            except Exception as e:
+                self.logger.warning(f"Error counting page elements: {str(e)}")
+        
         return metrics

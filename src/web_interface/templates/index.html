@@ -25,36 +25,50 @@
 
         <!-- Tutorial Navigation -->
         <div class="tutorial-nav">
-            <button class="nav-item active" onclick="showSection(this, 'getting-started')">Getting Started</button>
-            <button class="nav-item" onclick="showSection(this, 'analyze')">Analyze Website</button>
-            <button class="nav-item" onclick="showSection(this, 'scraping')">Scraping Analysis</button>
-            <button class="nav-item" onclick="showSection(this, 'dynamic-content')">Dynamic Content</button>
-            <button class="nav-item" onclick="showSection(this, 'troubleshooting')">Help</button>
-            <button class="nav-item" onclick="showSection(this, 'test-runner')">Test Runner</button>
+            <button class="nav-item active" onclick="showSection('getting-started', this)">Getting Started</button>
+            <button class="nav-item" onclick="showSection('analyze', this)">Analyze Website</button>
+            <button class="nav-item" onclick="showSection('scraping', this)">Scraping Analysis</button>
+            <button class="nav-item" onclick="showSection('dynamic-content', this)">Dynamic Content</button>
+            <button class="nav-item" onclick="showSection('troubleshooting', this)">Help</button>
+            <button class="nav-item" onclick="showSection('test-runner', this)">Test Runner</button>
         </div>
 
         <!-- Getting Started Section -->
         <div id="getting-started" class="tutorial-section active">
-            <h2>📚 Getting Started</h2>
-            <p>Welcome! Let's test your website using simple English commands.</p>
-
-            <div class="tip">
-                <strong>✨ Quick Tips:</strong>
-                <ul>
-                    <li>Use "Analyze Website" for smart test suggestions</li>
-                    <li>Always add wait steps between actions</li>
-                    <li>Start with simple test cases</li>
-                </ul>
+            <h2>👋 Welcome!</h2>
+            <p>Get started with our website testing framework in 3 simple steps:</p>
+            
+            <div class="steps">
+                <div class="step">
+                    <h3>1. Choose a Test Scenario</h3>
+                    <p>Select from our pre-built scenarios:</p>
+                    <div class="example-scenarios">
+                        <button onclick="loadExample('simple')">Simple Search Test</button>
+                        <button onclick="loadExample('infinite-scroll')">Infinite Scroll Test</button>
+                        <button onclick="loadExample('dynamic')">Dynamic Content Test</button>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <h3>2. Analyze Your Website</h3>
+                    <p>Let our tool analyze your website's structure and suggest test scenarios:</p>
+                    <button onclick="showSection('analyze', document.querySelector('.nav-item[onclick*=\'analyze\']'))">
+                        Start Analysis
+                    </button>
+                </div>
+                
+                <div class="step">
+                    <h3>3. Run Tests</h3>
+                    <p>Execute your tests and view detailed results:</p>
+                    <button onclick="showSection('test-runner', document.querySelector('.nav-item[onclick*=\'test-runner\']'))">
+                        Open Test Runner
+                    </button>
+                </div>
             </div>
-
-            <div class="example-card">
-                <h4>🔍 Simple Search Test</h4>
-                <div class="example-code">wait for 2 seconds
-type "test" into search box
-click on search button
-wait for 2 seconds
-verify that results appear</div>
-                <button class="try-it-btn" onclick="loadExample('simple')">Try It</button>
+            
+            <div class="tip-box">
+                <h4>💡 Pro Tip</h4>
+                <p>Start with our website analyzer to automatically generate test scenarios based on your site's structure!</p>
             </div>
         </div>
 
@@ -87,72 +101,19 @@ verify that results appear</div>
             </div>
         </div>
 
-        <!-- Scraping Analysis Section -->
+        <!-- Other sections -->
         <div id="scraping" class="tutorial-section">
-            <h2>🔍 Scraping Analysis</h2>
-            <p>Analyze a webpage to get detailed information about its structure and useful selectors for web scraping.</p>
-
-            <form id="scrapingForm">
-                <div class="form-group">
-                    <label for="scraping_url">Website URL:</label>
-                    <input type="url" id="scraping_url" name="url" required 
-                           placeholder="https://www.example.com">
-                    <div class="tip">Include http:// or https:// in the URL</div>
-                </div>
-                <button type="submit">🔎 Analyze for Scraping</button>
-            </form>
-
-            <div id="scraping-loading" style="display: none;">
-                <p>🔄 Analyzing webpage structure... Please wait...</p>
-            </div>
-
-            <div id="scraping-results" class="scraping-section" style="display: none;">
-                <h3>Analysis Results</h3>
-
-                <div class="result-section">
-                    <h4>📊 Tag Statistics</h4>
-                    <div id="tag-stats" class="tag-stats"></div>
-                </div>
-
-                <div class="result-section">
-                    <h4>🎯 Recommended Selectors</h4>
-                    <div id="recommended-selectors"></div>
-                </div>
-
-                <div class="result-section">
-                    <h4>📋 Content Patterns</h4>
-                    <div id="content-patterns" class="patterns-grid"></div>
-                </div>
-            </div>
+            <!-- Scraping content -->
         </div>
 
-        <!-- Dynamic Content Section -->
         <div id="dynamic-content" class="tutorial-section">
-            <h2>🔄 Dynamic Content Testing</h2>
-
-            <div class="example-card">
-                <h4>♾️ Infinite Scroll Test</h4>
-                <div class="example-code">wait for 2 seconds
-scroll down till end
-wait for 2 seconds
-verify that new content appears
-scroll down till end
-wait for 2 seconds
-verify that more content appears</div>
-                <button class="try-it-btn" onclick="loadExample('infinite-scroll')">Try It</button>
-            </div>
-
-            <div class="example-card">
-                <h4>🔄 Load More Content</h4>
-                <div class="example-code">wait for 2 seconds
-click on load more button
-wait for 2 seconds
-verify that new items appear</div>
-                <button class="try-it-btn" onclick="loadExample('dynamic')">Try It</button>
-            </div>
+            <!-- Dynamic content -->
         </div>
 
-        <!-- Test Runner Section -->
+        <div id="troubleshooting" class="tutorial-section">
+            <!-- Help content -->
+        </div>
+
         <div id="test-runner" class="tutorial-section">
             <h2>🚀 Run Your Tests</h2>
             
@@ -183,10 +144,10 @@ verify that new items appear</div>
     </div>
 
     <script>
-        function showSection(button, sectionId) {
+        // Navigation function
+        function showSection(sectionId, button) {
             // Hide all sections
             document.querySelectorAll('.tutorial-section').forEach(section => {
-                section.style.display = 'none';
                 section.classList.remove('active');
             });
 
@@ -196,21 +157,13 @@ verify that new items appear</div>
             });
 
             // Show selected section and activate button
-            const section = document.getElementById(sectionId);
-            if (section) {
-                section.style.display = 'block';
-                section.classList.add('active');
-            }
-            button.classList.add('active');
+            document.getElementById(sectionId)?.classList.add('active');
+            button?.classList.add('active');
         }
 
         // Initialize first section
         document.addEventListener('DOMContentLoaded', () => {
-            const firstButton = document.querySelector('.nav-item');
-            const firstSection = 'getting-started';
-            if (firstButton) {
-                showSection(firstButton, firstSection);
-            }
+            showSection('getting-started', document.querySelector('.nav-item'));
         });
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
