@@ -15,101 +15,37 @@ function toggleTheme() {
 
 function updateThemeIcon(theme) {
     const icon = document.querySelector('.theme-toggle i');
-    icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-}
-
-// Chart Configuration
-let charts = {
-    loadTime: null,
-    elements: null,
-    performance: null
-};
-
-function initCharts(data) {
-    const ctx = {
-        loadTime: document.getElementById('loadTimeChart')?.getContext('2d'),
-        elements: document.getElementById('elementChart')?.getContext('2d'),
-        performance: document.getElementById('performanceChart')?.getContext('2d')
-    };
-
-    if (ctx.loadTime) {
-        charts.loadTime = new Chart(ctx.loadTime, {
-            type: 'line',
-            data: {
-                labels: ['Initial', 'After 1s', 'After 2s', 'After 3s'],
-                datasets: [{
-                    label: 'Load Time (seconds)',
-                    data: [0, data.load_time / 3, data.load_time / 2, data.load_time],
-                    borderColor: '#3498db',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    }
-
-    if (ctx.elements && data.element_counts) {
-        charts.elements = new Chart(ctx.elements, {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(data.element_counts).map(key => key.replace('_', ' ')),
-                datasets: [{
-                    data: Object.values(data.element_counts),
-                    backgroundColor: [
-                        '#3498db',
-                        '#2ecc71',
-                        '#f1c40f',
-                        '#e74c3c',
-                        '#9b59b6'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    }
-
-    if (ctx.performance) {
-        const score = calculatePerformanceScore(data);
-        document.getElementById('performance-score').textContent = score;
-        
-        charts.performance = new Chart(ctx.performance, {
-            type: 'gauge',
-            data: {
-                datasets: [{
-                    value: score,
-                    data: [20, 40, 60, 80, 100],
-                    backgroundColor: ['#e74c3c', '#f1c40f', '#2ecc71'],
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
+    if (icon) {
+        icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
     }
 }
 
-function calculatePerformanceScore(data) {
-    // Complex performance calculation based on multiple factors
-    let score = 100;
+// Navigation
+function showSection(sectionId, button) {
+    // Hide all sections
+    document.querySelectorAll('.tutorial-section').forEach(section => {
+        section.classList.remove('active');
+    });
+
+    // Remove active class from all nav items
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+    });
+
+    // Show selected section and activate button
+    const section = document.getElementById(sectionId);
+    if (section) {
+        section.classList.add('active');
+    }
     
-    if (data.load_time > 3) score -= 20;
-    if (data.load_time > 5) score -= 20;
-    
-    const totalElements = Object.values(data.element_counts || {}).reduce((a, b) => a + b, 0);
-    if (totalElements > 1000) score -= 10;
-    if (totalElements > 2000) score -= 10;
-    
-    return Math.max(0, score);
+    if (button) {
+        button.classList.add('active');
+        button.setAttribute('aria-pressed', 'true');
+    }
 }
 
-// Example Scenarios Management
+// Example Scenarios
 const examples = {
     'simple': `wait for 2 seconds
 type "test" into search box
@@ -160,7 +96,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
     const progressInterval = setInterval(() => {
         progress += 5;
         if (progress <= 90) {
-            progressBar.style.width = progress + '%';
+            progressBar.style.width = `${progress}%`;
         }
     }, 500);
     
@@ -180,9 +116,107 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
         progressBar.style.width = '100%';
         
         if (data.success) {
-            initCharts(data.analysis.structure.page_metrics);
-            
-            // Update Forms Analysis
+            // Update metrics
+            if (data.analysis.structure.page_metrics) {
+                const metrics = data.analysis.structure.page_metrics;
+                
+                // Update load time display
+                const loadTimeElement = document.getElementById('load-time');
+                if (loadTimeElement) {
+                    loadTimeElement.textContent = metrics.load_time + 's';
+                }
+
+                // Create charts if Chart.js is available
+                if (window.Chart) {
+                    try {
+                        // Load time chart
+                        const loadTimeCanvas = document.getElementById('loadTimeChart');
+                        if (loadTimeCanvas) {
+                            new Chart(loadTimeCanvas, {
+                                type: 'line',
+                                data: {
+                                    labels: ['Initial', 'After 1s', 'After 2s', 'After 3s'],
+                                    datasets: [{
+                                        label: 'Load Time (seconds)',
+                                        data: [0, metrics.load_time / 3, metrics.load_time / 2, metrics.load_time],
+                                        borderColor: '#3498db',
+                                        tension: 0.4
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false
+                                }
+                            });
+                        }
+
+                        // Element distribution chart
+                        const elementCanvas = document.getElementById('elementChart');
+                        if (elementCanvas && metrics.element_counts) {
+                            new Chart(elementCanvas, {
+                                type: 'doughnut',
+                                data: {
+                                    labels: Object.keys(metrics.element_counts).map(key => key.replace('_', ' ')),
+                                    datasets: [{
+                                        data: Object.values(metrics.element_counts),
+                                        backgroundColor: [
+                                            '#3498db',
+                                            '#2ecc71',
+                                            '#f1c40f',
+                                            '#e74c3c',
+                                            '#9b59b6'
+                                        ]
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false
+                                }
+                            });
+                        }
+
+                        // Performance score chart
+                        const score = 100 - (metrics.load_time > 3 ? 20 : 0) - (metrics.load_time > 5 ? 20 : 0);
+                        const scoreElement = document.getElementById('performance-score');
+                        if (scoreElement) {
+                            scoreElement.textContent = score;
+                        }
+
+                        const performanceCanvas = document.getElementById('performanceChart');
+                        if (performanceCanvas) {
+                            new Chart(performanceCanvas, {
+                                type: 'bar',
+                                data: {
+                                    labels: ['Performance Score'],
+                                    datasets: [{
+                                        data: [score],
+                                        backgroundColor: score > 80 ? '#2ecc71' : score > 60 ? '#f1c40f' : '#e74c3c'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 100
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: {
+                                            display: false
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    } catch (chartError) {
+                        console.error('Error creating charts:', chartError);
+                    }
+                }
+            }
+
+            // Update forms analysis
             const formsContainer = document.querySelector('.forms-container');
             if (formsContainer && data.analysis.structure.forms) {
                 formsContainer.innerHTML = data.analysis.structure.forms.map(form => `
@@ -205,7 +239,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                 `).join('') || '<p>No forms found</p>';
             }
 
-            // Update Navigation Structure
+            // Update navigation structure
             const navContainer = document.querySelector('.navigation-container');
             if (navContainer && data.analysis.structure.navigation) {
                 navContainer.innerHTML = data.analysis.structure.navigation.map(nav => `
@@ -224,7 +258,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                 `).join('') || '<p>No navigation structure found</p>';
             }
 
-            // Update Dynamic Content Analysis
+            // Update dynamic content section
             const dynamicContainer = document.querySelector('.dynamic-container');
             if (dynamicContainer && data.analysis.structure.dynamic_content) {
                 const dynamic = data.analysis.structure.dynamic_content;
@@ -246,7 +280,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                 `;
             }
 
-            // Update Suggested Scenarios
+            // Update suggested scenarios
             const suggestedContainer = document.querySelector('.suggestions-container');
             if (suggestedContainer && data.analysis.structure.suggested_scenarios) {
                 suggestedContainer.innerHTML = data.analysis.structure.suggested_scenarios
@@ -254,7 +288,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                         <div class="card scenario-card">
                             <div class="scenario-header">
                                 <h4>${scenario.name}</h4>
-                                <button class="btn btn-primary try-it-btn" 
+                                <button class="btn btn-primary try-it-btn"
                                         data-scenario="${encodeURIComponent(JSON.stringify(scenario.steps))}"
                                         data-tooltip="Try this scenario">
                                     <i class="fas fa-play"></i>
@@ -268,14 +302,14 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
                     `).join('');
             }
 
+            // Show results
             results.style.display = 'block';
         } else {
             throw new Error(data.error || 'Analysis failed');
         }
     } catch (error) {
-        clearInterval(progressInterval);
         results.innerHTML = `
-            <div class="card error">
+            <div class="card result-error">
                 <h3><i class="fas fa-exclamation-triangle"></i> Error:</h3>
                 <p>${error.message}</p>
             </div>
@@ -288,7 +322,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
     }
 });
 
-// Test Runner Form Handler
+// Test Form Handler
 document.getElementById('testForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -307,7 +341,7 @@ document.getElementById('testForm')?.addEventListener('submit', async (e) => {
     const progressInterval = setInterval(() => {
         progress += 5;
         if (progress <= 90) {
-            progressBar.style.width = progress + '%';
+            progressBar.style.width = `${progress}%`;
         }
     }, 500);
     
@@ -391,101 +425,12 @@ ${steps.join('\n')}`;
     }
 });
 
-// Keyboard Shortcuts
-document.addEventListener('keydown', (e) => {
-    // Ctrl + Space for test step suggestions
-    if (e.ctrlKey && e.code === 'Space') {
-        const testSteps = document.getElementById('test_steps');
-        if (document.activeElement === testSteps) {
-            e.preventDefault();
-            showStepSuggestions(testSteps);
-        }
-    }
-    
-    // Ctrl + 1/2/3 for quick navigation
-    if (e.ctrlKey && e.key >= '1' && e.key <= '3') {
-        e.preventDefault();
-        const sections = ['getting-started', 'analyze', 'test-runner'];
-        const index = parseInt(e.key) - 1;
-        const navButton = document.querySelector(`.nav-item[onclick*='${sections[index]}']`);
-        if (navButton) {
-            showSection(sections[index], navButton);
-        }
-    }
-});
-
-// Navigation
-function showSection(sectionId, button) {
-    // Hide all sections
-    document.querySelectorAll('.tutorial-section').forEach(section => {
-        section.classList.remove('active');
-    });
-
-    // Remove active class from all nav items
-    document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-pressed', 'false');
-    });
-
-    // Show selected section and activate button
-    const section = document.getElementById(sectionId);
-    if (section) {
-        section.classList.add('active');
-        section.scrollIntoView({ behavior: 'smooth' });
-    }
-    
-    if (button) {
-        button.classList.add('active');
-        button.setAttribute('aria-pressed', 'true');
-    }
-}
-
-// Load Custom Scenario
-function loadCustomScenario(steps) {
-    try {
-        const testSteps = document.getElementById('test_steps');
-        if (!testSteps) return;
-        
-        let stepsArray;
-        if (typeof steps === 'string') {
-            const decodedSteps = decodeURIComponent(steps);
-            stepsArray = JSON.parse(decodedSteps);
-        } else {
-            stepsArray = steps;
-        }
-        
-        if (!Array.isArray(stepsArray)) return;
-        
-        const testRunnerNav = document.querySelector('.nav-item[onclick*="test-runner"]');
-        if (testRunnerNav) {
-            showSection('test-runner', testRunnerNav);
-            testSteps.value = stepsArray.join('\n');
-            testSteps.focus();
-        }
-        
-    } catch (error) {
-        console.error('Error loading scenario:', error);
-    }
-}
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     
     // Theme toggle handler
     document.querySelector('.theme-toggle')?.addEventListener('click', toggleTheme);
-    
-    // Scenario button handler
-    document.body.addEventListener('click', (event) => {
-        const button = event.target.closest('.try-it-btn');
-        if (button) {
-            const scenarioData = button.getAttribute('data-scenario');
-            if (scenarioData) {
-                event.preventDefault();
-                loadCustomScenario(scenarioData);
-            }
-        }
-    });
     
     // Show initial section
     showSection('getting-started', document.querySelector('.nav-item'));

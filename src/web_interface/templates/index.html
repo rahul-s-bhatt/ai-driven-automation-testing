@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -40,13 +41,13 @@
                     <h3><i class="fas fa-list-check"></i> 1. Choose a Test Scenario</h3>
                     <p>Select from our pre-built scenarios:</p>
                     <div class="example-scenarios">
-                        <button class="btn btn-primary" onclick="loadExample('simple')" data-tooltip="Basic website functionality test">
+                        <button class="btn btn-primary" onclick="loadExample('simple')">
                             <i class="fas fa-search"></i> Simple Search Test
                         </button>
-                        <button class="btn btn-primary" onclick="loadExample('infinite-scroll')" data-tooltip="Test infinite scrolling behavior">
+                        <button class="btn btn-primary" onclick="loadExample('infinite-scroll')">
                             <i class="fas fa-scroll"></i> Infinite Scroll Test
                         </button>
-                        <button class="btn btn-primary" onclick="loadExample('dynamic')" data-tooltip="Test dynamic content loading">
+                        <button class="btn btn-primary" onclick="loadExample('dynamic')">
                             <i class="fas fa-bolt"></i> Dynamic Content Test
                         </button>
                     </div>
@@ -54,7 +55,7 @@
                 
                 <div class="card">
                     <h3><i class="fas fa-microscope"></i> 2. Analyze Your Website</h3>
-                    <p>Let our tool analyze your website's structure and suggest test scenarios:</p>
+                    <p>Let our tool analyze your website's structure:</p>
                     <button class="btn btn-primary" onclick="showSection('analyze', document.querySelector('.nav-item[onclick*=\'analyze\']'))">
                         <i class="fas fa-search"></i> Start Analysis
                     </button>
@@ -62,7 +63,7 @@
                 
                 <div class="card">
                     <h3><i class="fas fa-play"></i> 3. Run Tests</h3>
-                    <p>Execute your tests and view detailed results:</p>
+                    <p>Execute your tests and view results:</p>
                     <button class="btn btn-primary" onclick="showSection('test-runner', document.querySelector('.nav-item[onclick*=\'test-runner\']'))">
                         <i class="fas fa-vial"></i> Open Test Runner
                     </button>
@@ -107,18 +108,24 @@
                     <div class="metric-card">
                         <h4>Page Load Time</h4>
                         <div class="metric-value" id="load-time">0s</div>
-                        <div class="chart-container" id="loadTimeChart"></div>
+                        <div class="chart-container">
+                            <canvas id="loadTimeChart"></canvas>
+                        </div>
                     </div>
                     
                     <div class="metric-card">
                         <h4>Element Distribution</h4>
-                        <div class="chart-container" id="elementChart"></div>
+                        <div class="chart-container">
+                            <canvas id="elementChart"></canvas>
+                        </div>
                     </div>
                     
                     <div class="metric-card">
                         <h4>Performance Score</h4>
                         <div class="metric-value" id="performance-score">0</div>
-                        <div class="chart-container" id="performanceChart"></div>
+                        <div class="chart-container">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -192,8 +199,6 @@
         </section>
     </div>
 
-    <!-- Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
