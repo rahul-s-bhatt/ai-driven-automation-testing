@@ -25,16 +25,16 @@
 
         <!-- Tutorial Navigation -->
         <div class="tutorial-nav">
-            <button class="nav-item" data-section="getting-started">Getting Started</button>
-            <button class="nav-item" data-section="analyze">Analyze Website</button>
-            <button class="nav-item" data-section="scraping">Scraping Analysis</button>
-            <button class="nav-item" data-section="dynamic-content">Dynamic Content</button>
-            <button class="nav-item" data-section="troubleshooting">Help</button>
-            <button class="nav-item" data-section="test-runner">Test Runner</button>
+            <button class="nav-item active" onclick="showSection(this, 'getting-started')">Getting Started</button>
+            <button class="nav-item" onclick="showSection(this, 'analyze')">Analyze Website</button>
+            <button class="nav-item" onclick="showSection(this, 'scraping')">Scraping Analysis</button>
+            <button class="nav-item" onclick="showSection(this, 'dynamic-content')">Dynamic Content</button>
+            <button class="nav-item" onclick="showSection(this, 'troubleshooting')">Help</button>
+            <button class="nav-item" onclick="showSection(this, 'test-runner')">Test Runner</button>
         </div>
 
         <!-- Getting Started Section -->
-        <div id="getting-started" class="tutorial-section">
+        <div id="getting-started" class="tutorial-section active">
             <h2>📚 Getting Started</h2>
             <p>Welcome! Let's test your website using simple English commands.</p>
 
@@ -108,21 +108,20 @@ verify that results appear</div>
 
             <div id="scraping-results" class="scraping-section" style="display: none;">
                 <h3>Analysis Results</h3>
+
                 <div class="result-section">
                     <h4>📊 Tag Statistics</h4>
                     <div id="tag-stats" class="tag-stats"></div>
                 </div>
+
                 <div class="result-section">
                     <h4>🎯 Recommended Selectors</h4>
                     <div id="recommended-selectors"></div>
                 </div>
+
                 <div class="result-section">
                     <h4>📋 Content Patterns</h4>
                     <div id="content-patterns" class="patterns-grid"></div>
-                </div>
-                <div class="result-section">
-                    <h4>🖼️ Structure Visualization</h4>
-                    <div id="scraping-visualization"></div>
                 </div>
             </div>
         </div>
@@ -150,38 +149,6 @@ click on load more button
 wait for 2 seconds
 verify that new items appear</div>
                 <button class="try-it-btn" onclick="loadExample('dynamic')">Try It</button>
-            </div>
-        </div>
-
-        <!-- Troubleshooting Section -->
-        <div id="troubleshooting" class="tutorial-section">
-            <h2>🔧 Help & Tips</h2>
-
-            <div class="tip">
-                <strong>Common Issues:</strong>
-                <ul>
-                    <li>If elements aren't found, try adding wait steps</li>
-                    <li>For dynamic content, increase wait times</li>
-                    <li>Make sure element names match exactly</li>
-                    <li>Check browser console for errors</li>
-                </ul>
-            </div>
-
-            <div class="example-card">
-                <h4>✅ Working Examples</h4>
-                <div class="example-code"># Waiting for elements
-wait for 2 seconds
-verify that button exists
-click on button</div>
-            </div>
-
-            <div class="example-card">
-                <h4>❌ Common Mistakes</h4>
-                <div class="example-code"># No wait step
-click on button
-# Won't work! Add wait:
-wait for 2 seconds
-click on button</div>
             </div>
         </div>
 
@@ -215,6 +182,37 @@ click on button</div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
+    <script>
+        function showSection(button, sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.tutorial-section').forEach(section => {
+                section.style.display = 'none';
+                section.classList.remove('active');
+            });
+
+            // Remove active class from all nav items
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected section and activate button
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.style.display = 'block';
+                section.classList.add('active');
+            }
+            button.classList.add('active');
+        }
+
+        // Initialize first section
+        document.addEventListener('DOMContentLoaded', () => {
+            const firstButton = document.querySelector('.nav-item');
+            const firstSection = 'getting-started';
+            if (firstButton) {
+                showSection(firstButton, firstSection);
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

@@ -45,7 +45,7 @@ h1 {
     font-size: 16px;
     color: #666;
     transition: all 0.3s ease;
-    border-radius: 4px;
+    border-radius: 4px 4px 0 0;
 }
 
 .nav-item:hover {
@@ -55,8 +55,8 @@ h1 {
 
 .nav-item.active {
     color: #3498db;
-    background: #f8f9fa;
-    font-weight: bold;
+    border-bottom: 2px solid #3498db;
+    margin-bottom: -2px;
 }
 
 /* Sections */
@@ -66,13 +66,11 @@ h1 {
     background: #fff;
     border-radius: 8px;
     margin-bottom: 20px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    animation: fadeIn 0.3s ease;
 }
 
 .tutorial-section.active {
     display: block;
-    opacity: 1;
 }
 
 /* Tips and Cards */
@@ -90,11 +88,6 @@ h1 {
     margin: 15px 0;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.2s ease;
-}
-
-.example-card:hover {
-    transform: translateY(-2px);
 }
 
 .example-code {
@@ -106,7 +99,6 @@ h1 {
     margin: 10px 0;
     overflow-x: auto;
     white-space: pre;
-    line-height: 1.4;
 }
 
 /* Forms */
@@ -166,7 +158,7 @@ button[type="submit"]:hover {
 }
 
 .try-it-btn {
-    background-color: #3498db;
+    background: #3498db;
     color: white;
     padding: 8px 16px;
     border: none;
@@ -177,17 +169,16 @@ button[type="submit"]:hover {
 }
 
 .try-it-btn:hover {
-    background-color: #2980b9;
+    background: #2980b9;
     transform: translateY(-1px);
 }
 
-/* Results */
+/* Analysis Results */
 .analysis-result {
     background: #f8f9fa;
     padding: 20px;
     border-radius: 8px;
     margin: 15px 0;
-    animation: fadeIn 0.3s ease;
 }
 
 .structure-info {
@@ -202,7 +193,55 @@ button[type="submit"]:hover {
     padding: 15px;
     border-radius: 4px;
     text-align: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.structure-item:hover {
+    transform: translateY(-2px);
+}
+
+.structure-item h4 {
+    margin: 0;
+    color: #3498db;
+    margin-bottom: 10px;
+}
+
+.structure-item p {
+    margin: 8px 0;
+    font-size: 1.1em;
+    color: #2c3e50;
+}
+
+.structure-item small {
+    color: #666;
+    display: block;
+    margin-top: 5px;
+}
+
+.metrics-details {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.metrics-details small {
+    background: #f8f9fa;
+    padding: 3px 8px;
+    border-radius: 12px;
+    color: #666;
+    font-size: 0.8em;
+}
+
+.feature-detected {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.feature-not-detected {
+    color: #e74c3c;
+    font-weight: bold;
 }
 
 /* Loading States */
@@ -215,7 +254,7 @@ button[type="submit"]:hover {
     animation: pulse 1.5s infinite;
 }
 
-/* Results Display */
+/* Results */
 .results {
     margin-top: 20px;
     padding: 20px;
@@ -237,14 +276,6 @@ button[type="submit"]:hover {
 }
 
 /* Scraping Analysis */
-.scraping-section {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    margin-top: 20px;
-}
-
 .tag-stats {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -279,16 +310,34 @@ button[type="submit"]:hover {
     overflow-x: auto;
 }
 
+.copy-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    animation: fadeInOut 2s ease forwards;
+}
+
 /* Animations */
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 @keyframes pulse {
     0% { opacity: 0.6; }
     50% { opacity: 1; }
     100% { opacity: 0.6; }
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(20px); }
+    20% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); }
 }
 
 /* Responsive Design */
@@ -311,7 +360,8 @@ button[type="submit"]:hover {
         grid-template-columns: 1fr;
     }
     
-    .example-code {
-        font-size: 14px;
+    .metrics-details {
+        flex-direction: column;
+        align-items: center;
     }
 }
