@@ -3,178 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Website Testing Framework - Analyze and test web applications">
     <title>Website Testing Framework</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/styles.css') }}">
-    <style>
-        .tutorial-section {
-            display: none;
-        }
-        .tutorial-section.active {
-            display: block;
-            animation: fadeIn 0.3s ease-in;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <h1>🤖 Website Testing Framework</h1>
+        <header class="header">
+            <h1><i class="fas fa-robot"></i> Website Testing Framework</h1>
+            <button class="theme-toggle" aria-label="Toggle dark mode" data-tooltip="Toggle dark mode">
+                <i class="fas fa-moon"></i>
+            </button>
+        </header>
 
-        <!-- Tutorial Navigation -->
-        <div class="tutorial-nav">
-            <button class="nav-item active" onclick="showSection('getting-started', this)">Getting Started</button>
-            <button class="nav-item" onclick="showSection('analyze', this)">Analyze Website</button>
-            <button class="nav-item" onclick="showSection('test-runner', this)">Test Runner</button>
-        </div>
+        <nav class="tutorial-nav" role="navigation" aria-label="Main navigation">
+            <button class="nav-item active" onclick="showSection('getting-started', this)" aria-pressed="true">
+                <i class="fas fa-home"></i> Getting Started
+            </button>
+            <button class="nav-item" onclick="showSection('analyze', this)" aria-pressed="false">
+                <i class="fas fa-search"></i> Analyze Website
+            </button>
+            <button class="nav-item" onclick="showSection('test-runner', this)" aria-pressed="false">
+                <i class="fas fa-vial"></i> Test Runner
+            </button>
+        </nav>
 
         <!-- Getting Started Section -->
-        <div id="getting-started" class="tutorial-section active">
-            <h2>👋 Welcome!</h2>
+        <section id="getting-started" class="tutorial-section active" aria-labelledby="getting-started-title">
+            <h2 id="getting-started-title"><i class="fas fa-flag"></i> Welcome!</h2>
             <p>Get started with our website testing framework in 3 simple steps:</p>
             
-            <div class="steps">
-                <div class="step">
-                    <h3>1. Choose a Test Scenario</h3>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3><i class="fas fa-list-check"></i> 1. Choose a Test Scenario</h3>
                     <p>Select from our pre-built scenarios:</p>
                     <div class="example-scenarios">
-                        <button onclick="loadExample('simple')">Simple Search Test</button>
-                        <button onclick="loadExample('infinite-scroll')">Infinite Scroll Test</button>
-                        <button onclick="loadExample('dynamic')">Dynamic Content Test</button>
+                        <button class="btn btn-primary" onclick="loadExample('simple')" data-tooltip="Basic website functionality test">
+                            <i class="fas fa-search"></i> Simple Search Test
+                        </button>
+                        <button class="btn btn-primary" onclick="loadExample('infinite-scroll')" data-tooltip="Test infinite scrolling behavior">
+                            <i class="fas fa-scroll"></i> Infinite Scroll Test
+                        </button>
+                        <button class="btn btn-primary" onclick="loadExample('dynamic')" data-tooltip="Test dynamic content loading">
+                            <i class="fas fa-bolt"></i> Dynamic Content Test
+                        </button>
                     </div>
                 </div>
                 
-                <div class="step">
-                    <h3>2. Analyze Your Website</h3>
+                <div class="card">
+                    <h3><i class="fas fa-microscope"></i> 2. Analyze Your Website</h3>
                     <p>Let our tool analyze your website's structure and suggest test scenarios:</p>
-                    <button onclick="showSection('analyze', document.querySelector('.nav-item[onclick*=\'analyze\']'))">
-                        Start Analysis
+                    <button class="btn btn-primary" onclick="showSection('analyze', document.querySelector('.nav-item[onclick*=\'analyze\']'))">
+                        <i class="fas fa-search"></i> Start Analysis
                     </button>
                 </div>
                 
-                <div class="step">
-                    <h3>3. Run Tests</h3>
+                <div class="card">
+                    <h3><i class="fas fa-play"></i> 3. Run Tests</h3>
                     <p>Execute your tests and view detailed results:</p>
-                    <button onclick="showSection('test-runner', document.querySelector('.nav-item[onclick*=\'test-runner\']'))">
-                        Open Test Runner
+                    <button class="btn btn-primary" onclick="showSection('test-runner', document.querySelector('.nav-item[onclick*=\'test-runner\']'))">
+                        <i class="fas fa-vial"></i> Open Test Runner
                     </button>
                 </div>
             </div>
             
-            <div class="tip-box">
-                <h4>💡 Pro Tip</h4>
-                <p>Start with our website analyzer to automatically generate test scenarios based on your site's structure!</p>
+            <div class="tip-box card">
+                <h4><i class="fas fa-lightbulb"></i> Pro Tip</h4>
+                <p>Press <kbd class="keyboard-shortcut">Ctrl + Space</kbd> for test step suggestions!</p>
             </div>
-        </div>
+        </section>
 
         <!-- Analyze Website Section -->
-        <div id="analyze" class="tutorial-section">
-            <h2>🔍 Website Analysis</h2>
-            <p>Let us analyze your website and suggest relevant test scenarios.</p>
-
-            <form id="analyzeForm">
+        <section id="analyze" class="tutorial-section" aria-labelledby="analyze-title">
+            <h2 id="analyze-title"><i class="fas fa-search"></i> Website Analysis</h2>
+            
+            <form id="analyzeForm" class="card">
                 <div class="form-group">
                     <label for="analyze_url">Website URL:</label>
-                    <input type="url" id="analyze_url" name="url" required 
-                           placeholder="https://www.example.com">
-                    <div class="tip">Include http:// or https:// in the URL</div>
+                    <div class="input-group">
+                        <input type="url" id="analyze_url" name="url" required 
+                               placeholder="https://www.example.com"
+                               aria-describedby="url-tip">
+                        <div class="tip" id="url-tip">Include http:// or https:// in the URL</div>
+                    </div>
                 </div>
-                <button type="submit">🔎 Analyze Website</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Analyze Website
+                </button>
             </form>
 
-            <div id="analyzing" style="display: none;">
-                <p>🔄 Analyzing website structure... Please wait...</p>
+            <div id="analyzing" class="card" style="display: none;" aria-live="polite">
+                <div class="loading-spinner"></div>
+                <p>Analyzing website structure...</p>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" style="width: 0%"></div>
+                </div>
             </div>
 
-            <div id="analysis-results" class="analysis-result" style="display: none;">
-                <h3>Analysis Results</h3>
-                <div class="analysis-stats">
-                    <h4>📊 Page Statistics</h4>
-                    <div class="stats-container">
-                        <!-- Will be populated by script.js with actual metrics -->
+            <div id="analysis-results" style="display: none;">
+                <div class="dashboard-grid">
+                    <div class="metric-card">
+                        <h4>Page Load Time</h4>
+                        <div class="metric-value" id="load-time">0s</div>
+                        <div class="chart-container" id="loadTimeChart"></div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <h4>Element Distribution</h4>
+                        <div class="chart-container" id="elementChart"></div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <h4>Performance Score</h4>
+                        <div class="metric-value" id="performance-score">0</div>
+                        <div class="chart-container" id="performanceChart"></div>
                     </div>
                 </div>
-                <div class="analysis-sections">
-                    <div class="forms-section">
-                        <h4>📝 Forms Found</h4>
-                        <div class="forms-container">
-                            <!-- Will be populated by script.js -->
-                        </div>
+
+                <div class="analysis-sections dashboard-grid">
+                    <div class="card">
+                        <h4><i class="fas fa-wpforms"></i> Forms Analysis</h4>
+                        <div class="forms-container"></div>
                     </div>
-                    <div class="navigation-section">
-                        <h4>🧭 Navigation Structure</h4>
-                        <div class="navigation-container">
-                            <!-- Will be populated by script.js -->
-                        </div>
+                    
+                    <div class="card">
+                        <h4><i class="fas fa-sitemap"></i> Navigation Structure</h4>
+                        <div class="navigation-container"></div>
                     </div>
-                    <div class="dynamic-section">
-                        <h4>⚡ Dynamic Content</h4>
-                        <div class="dynamic-container">
-                            <!-- Will be populated by script.js -->
-                        </div>
+                    
+                    <div class="card">
+                        <h4><i class="fas fa-bolt"></i> Dynamic Elements</h4>
+                        <div class="dynamic-container"></div>
                     </div>
                 </div>
-                <div id="suggested-scenarios">
-                    <h4>📋 Suggested Test Scenarios</h4>
+
+                <div id="suggested-scenarios" class="card">
+                    <h4><i class="fas fa-lightbulb"></i> Suggested Test Scenarios</h4>
                     <div class="suggestions-container"></div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div id="test-runner" class="tutorial-section">
-            <h2>🚀 Run Your Tests</h2>
+        <!-- Test Runner Section -->
+        <section id="test-runner" class="tutorial-section" aria-labelledby="test-runner-title">
+            <h2 id="test-runner-title"><i class="fas fa-vial"></i> Test Runner</h2>
             
-            <form id="testForm">
+            <form id="testForm" class="card">
                 <div class="form-group">
                     <label for="url">Website URL:</label>
-                    <input type="url" id="url" name="url" required 
-                           placeholder="https://www.example.com">
-                    <div class="tip">Include http:// or https:// in the URL</div>
+                    <div class="input-group">
+                        <input type="url" id="url" name="url" required 
+                               placeholder="https://www.example.com"
+                               aria-describedby="test-url-tip">
+                        <div class="tip" id="test-url-tip">Include http:// or https:// in the URL</div>
+                    </div>
                 </div>
+                
                 <div class="form-group">
                     <label for="test_steps">Test Steps:</label>
-                    <textarea id="test_steps" name="test_steps" required 
-                             placeholder="Enter your test steps here...&#10;Example:&#10;wait for 2 seconds&#10;click on search button"></textarea>
-                    <div class="tip">Start with a wait step!</div>
+                    <div class="input-group">
+                        <textarea id="test_steps" name="test_steps" required 
+                                placeholder="Enter your test steps here..."
+                                aria-describedby="steps-tip"></textarea>
+                        <div class="tip" id="steps-tip">
+                            Press <kbd class="keyboard-shortcut">Ctrl + Space</kbd> for suggestions
+                        </div>
+                    </div>
                 </div>
-                <button type="submit">▶️ Run Tests</button>
+                
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-play"></i> Run Tests
+                </button>
             </form>
 
-            <div id="loading" style="display: none;">
-                🔄 Running tests... Please wait...
+            <div id="loading" class="card" style="display: none;" aria-live="polite">
+                <div class="loading-spinner"></div>
+                <p>Running tests...</p>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" style="width: 0%"></div>
+                </div>
             </div>
 
-            <div id="results" class="results" style="display: none;">
+            <div id="results" class="test-results" style="display: none;" aria-live="polite">
                 <!-- Will be populated by JavaScript -->
             </div>
-        </div>
+        </section>
     </div>
 
-    <script>
-        // Navigation function
-        function showSection(sectionId, button) {
-            // Hide all sections
-            document.querySelectorAll('.tutorial-section').forEach(section => {
-                section.classList.remove('active');
-            });
-
-            // Remove active class from all nav items
-            document.querySelectorAll('.nav-item').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            // Show selected section and activate button
-            document.getElementById(sectionId)?.classList.add('active');
-            button?.classList.add('active');
-        }
-
-        // Initialize first section
-        document.addEventListener('DOMContentLoaded', () => {
-            showSection('getting-started', document.querySelector('.nav-item'));
-        });
-    </script>
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
