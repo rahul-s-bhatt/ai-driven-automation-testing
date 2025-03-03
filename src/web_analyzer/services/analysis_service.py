@@ -38,7 +38,7 @@ class WebAnalysisService:
             url: The URL to analyze
             
         Returns:
-            Dict containing analysis results
+            Dict containing analysis results including dual-mode tests
         """
         try:
             self.logger.info(f"Starting enhanced analysis of {url}")

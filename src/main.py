@@ -30,11 +30,18 @@ from src.test_engine.validator import TestValidator
 from src.reporting.report_generator import ReportGenerator
 from src.reporting.logger import TestLogger
 from src.utils.config_loader import ConfigLoader, ConfigurationError
+from src.utils.license_manager import LicenseManager, LicenseFeatures
 
 def setup_argument_parser() -> argparse.ArgumentParser:
     """Set up command line argument parser."""
     parser = argparse.ArgumentParser(
-        description='Automated Website Testing Framework'
+        description='Automated Website Testing Framework (Private Edition)'
+    )
+    
+    parser.add_argument(
+        '--license',
+        help='License key for premium features',
+        type=str
     )
     
     parser.add_argument(
@@ -162,6 +169,18 @@ def main():
         driver.set_window_size(*browser_config.window_size)
 
         try:
+            # Initialize license manager
+            license_manager = LicenseManager()
+            if args.license:
+                if not license_manager.validate_license(args.license):
+                    framework_logger.error("Invalid license key")
+                    return 1
+                framework_logger.info(f"License validated successfully - Type: {license_manager.license_data['type']}")
+            
+            # Check parallel execution feature
+            parallel_execution = license_manager.check_feature_access("parallel_execution")
+            advanced_reporting = license_manager.check_feature_access("advanced_reporting")
+            
             # Initialize components
             dom_parser = DOMParser(driver)
             element_classifier = ElementClassifier()
@@ -169,10 +188,14 @@ def main():
             test_executor = TestExecutor(
                 driver=driver,
                 screenshot_dir=config.screenshot_dir,
-                base_url=config.base_url  # Pass base_url to TestExecutor
+                base_url=config.base_url,
+                parallel_enabled=parallel_execution
             )
             validator = TestValidator(driver, config.report_dir)
-            report_generator = ReportGenerator(config.report_dir)
+            report_generator = ReportGenerator(
+                config.report_dir,
+                advanced_reporting=advanced_reporting
+            )
 
             # Load and execute test scenarios
             scenarios = load_test_scenarios(args.tests, scenario_parser)
@@ -183,11 +206,21 @@ def main():
             framework_logger.info(f"Found {len(scenarios)} test scenarios")
             all_reports = []
 
+            # Check if we have enough test executions available
+            if not license_manager.track_test_execution():
+                framework_logger.error("Test execution limit reached for current license")
+                return 1
+
             for scenario in scenarios:
                 framework_logger.info(f"Executing scenario: {scenario.name}")
                 logger.log_test_start(scenario.name)
 
                 try:
+                    # Track test execution for this scenario
+                    if not license_manager.track_test_execution():
+                        framework_logger.error("Test execution limit reached during scenario execution")
+                        break
+
                     # Execute test scenario
                     success, errors = test_executor.execute_scenario(scenario)
                     

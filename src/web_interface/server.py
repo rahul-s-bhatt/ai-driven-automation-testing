@@ -8,6 +8,7 @@ import tempfile
 import logging
 from pathlib import Path
 import json
+import time
 from flask import Flask, render_template, request, jsonify, send_file
 import yaml
 
@@ -29,9 +30,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 
-# Configure logging
+# Configure logging and app settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize with temporary directory for test outputs
+app.config['TEST_OUTPUT_DIR'] = tempfile.mkdtemp()
 
 def setup_webdriver(headless=True):
     """Set up and configure WebDriver."""
@@ -264,7 +268,26 @@ def run_test():
 @app.route('/screenshots/<path:filename>')
 def serve_screenshot(filename):
     """Serve screenshot files."""
-    return send_file(os.path.join(app.config['SCREENSHOT_DIR'], filename))
+    return send_file(os.path.join(app.config['TEST_OUTPUT_DIR'], 'screenshots', filename))
+
+@app.route('/test_output/<path:filename>')
+def serve_test_output(filename):
+    """Serve test output files (human instructions and automation scripts)."""
+    try:
+        file_path = os.path.join(app.config['TEST_OUTPUT_DIR'], 'test_output', filename)
+        mimetype = 'text/markdown' if filename.endswith('.md') else 'text/x-python'
+        return send_file(
+            file_path,
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        logger.error(f"Error serving test output file: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'File not found'
+        }), 404
 
 if __name__ == '__main__':
     app.run(debug=True)

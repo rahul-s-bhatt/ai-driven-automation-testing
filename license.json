@@ -1,0 +1,14 @@
+{
+    "license_key": "E1710337400-E8B4F12-7A8B9C2D-MD5ABC",
+    "type": "enterprise",
+    "issued_to": "Internal Testing",
+    "issued_date": "2025-03-03",
+    "expiration_date": "2026-03-03",
+    "features": [
+        "parallel_execution",
+        "advanced_reporting",
+        "cloud_execution",
+        "team_collaboration",
+        "custom_integrations"
+    ]
+}
