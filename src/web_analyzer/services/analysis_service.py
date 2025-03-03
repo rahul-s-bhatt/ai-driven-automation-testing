@@ -193,22 +193,26 @@ class WebAnalysisService:
         try:
             search_terms = self._normalize_input(human_input)
             suggestions = []
-            analyzed_tags = self.last_analysis['tag_analysis']
+            analyzed_tags = self.last_analysis.get('tag_analysis', {})
             
-            if 'semantic_structure' in analyzed_tags:
-                suggestions.extend(
-                    self._find_semantic_matches(search_terms, analyzed_tags['semantic_structure'])
-                )
-            
-            if 'tag_patterns' in analyzed_tags:
-                suggestions.extend(
-                    self._find_pattern_matches(search_terms, analyzed_tags['tag_patterns'])
-                )
-            
-            if 'key_attributes' in analyzed_tags:
-                suggestions.extend(
-                    self._find_attribute_matches(search_terms, analyzed_tags['key_attributes'])
-                )
+            if analyzed_tags:
+                semantic_data = analyzed_tags.get('semantic_structure', {})
+                if semantic_data:
+                    suggestions.extend(
+                        self._find_semantic_matches(search_terms, semantic_data)
+                    )
+                
+                pattern_data = analyzed_tags.get('tag_patterns', {})
+                if pattern_data:
+                    suggestions.extend(
+                        self._find_pattern_matches(search_terms, pattern_data)
+                    )
+                
+                attribute_data = analyzed_tags.get('key_attributes', {})
+                if attribute_data:
+                    suggestions.extend(
+                        self._find_attribute_matches(search_terms, attribute_data)
+                    )
 
             return self._prioritize_suggestions(suggestions)
 
@@ -223,22 +227,23 @@ class WebAnalysisService:
 
         try:
             scenarios = []
-            structure_data = self.last_analysis['structure_analysis']
+            structure_data = self.last_analysis.get('structure_analysis', {})
             
-            if 'layout' in structure_data:
-                scenarios.extend(
-                    self._generate_layout_scenarios(element_type, structure_data['layout'])
-                )
-            
-            if 'components' in structure_data:
-                scenarios.extend(
-                    self._generate_component_scenarios(element_type, structure_data['components'])
-                )
-            
-            if 'dynamic_content' in structure_data:
-                scenarios.extend(
-                    self._generate_dynamic_scenarios(element_type, structure_data['dynamic_content'])
-                )
+            if structure_data:
+                if 'layout' in structure_data:
+                    scenarios.extend(
+                        self._generate_layout_scenarios(element_type, structure_data['layout'])
+                    )
+                
+                if 'components' in structure_data:
+                    scenarios.extend(
+                        self._generate_component_scenarios(element_type, structure_data['components'])
+                    )
+                
+                if 'dynamic_content' in structure_data:
+                    scenarios.extend(
+                        self._generate_dynamic_scenarios(element_type, structure_data['dynamic_content'])
+                    )
 
             return scenarios
 
@@ -258,51 +263,66 @@ class WebAnalysisService:
 
     def _perform_tag_analysis(self) -> Dict:
         """Perform enhanced tag analysis."""
-        return self.tag_analyzer.analyze_tags(self.current_soup)
+        try:
+            return self.tag_analyzer.analyze_tags(self.current_soup) or {}
+        except Exception as e:
+            self.logger.error(f"Error in tag analysis: {str(e)}")
+            return {}
 
     def _perform_structure_analysis(self) -> Dict:
         """Perform enhanced structure analysis."""
-        return self.structure_analyzer.analyze_structure(self.current_soup, self.driver)
+        try:
+            return self.structure_analyzer.analyze_structure(self.current_soup, self.driver) or {}
+        except Exception as e:
+            self.logger.error(f"Error in structure analysis: {str(e)}")
+            return {}
 
     def _generate_element_suggestions(self) -> List[Dict]:
         """Generate smart element suggestions based on analysis."""
         suggestions = []
         
-        if 'tag_analysis' in self.last_analysis:
-            if 'semantic_structure' in self.last_analysis['tag_analysis']:
-                semantic_data = self.last_analysis['tag_analysis']['semantic_structure']
-                
-                if 'header_elements' in semantic_data:
-                    for header in semantic_data['header_elements'].get('hierarchy', []):
-                        suggestions.append({
-                            'type': 'header',
-                            'selector': f"h{header}",
-                            'confidence': 0.9,
-                            'description': f"Level {header} heading"
-                        })
+        if not self.last_analysis:
+            return suggestions
+            
+        # Handle tag analysis suggestions
+        tag_analysis = self.last_analysis.get('tag_analysis', {})
+        if tag_analysis:
+            semantic_data = tag_analysis.get('semantic_structure', {})
+            
+            # Process header elements
+            header_elements = semantic_data.get('header_elements', {})
+            for header in header_elements.get('hierarchy', []):
+                suggestions.append({
+                    'type': 'header',
+                    'selector': f"h{header}",
+                    'confidence': 0.9,
+                    'description': f"Level {header} heading"
+                })
 
-                if 'navigation_elements' in semantic_data:
-                    nav_data = semantic_data['navigation_elements']
-                    if nav_data.get('primary_nav'):
-                        suggestions.append({
-                            'type': 'navigation',
-                            'selector': 'nav[role="navigation"]',
-                            'confidence': 0.95,
-                            'description': "Primary navigation"
-                        })
+            # Process navigation elements
+            nav_data = semantic_data.get('navigation_elements', {})
+            if nav_data.get('primary_nav'):
+                suggestions.append({
+                    'type': 'navigation',
+                    'selector': 'nav[role="navigation"]',
+                    'confidence': 0.95,
+                    'description': "Primary navigation"
+                })
 
-        if 'structure_analysis' in self.last_analysis:
-            if 'components' in self.last_analysis['structure_analysis']:
-                component_data = self.last_analysis['structure_analysis']['components']
-                
-                if 'interactive_elements' in component_data:
-                    for element in component_data['interactive_elements']:
-                        suggestions.append({
-                            'type': 'interactive',
-                            'selector': element.get('selector', ''),
-                            'confidence': 0.85,
-                            'description': element.get('description', '')
-                        })
+        # Handle structure analysis suggestions
+        structure_analysis = self.last_analysis.get('structure_analysis', {})
+        if structure_analysis:
+            component_data = structure_analysis.get('components', {})
+            
+            # Process interactive elements
+            for element in component_data.get('interactive_elements', []):
+                if element:  # Ensure element is not None
+                    suggestions.append({
+                        'type': 'interactive',
+                        'selector': element.get('selector', ''),
+                        'confidence': 0.85,
+                        'description': element.get('description', '')
+                    })
 
         return suggestions
 
@@ -310,40 +330,41 @@ class WebAnalysisService:
         """Generate test recommendations based on analysis."""
         recommendations = []
         
-        if 'structure_analysis' in self.last_analysis:
-            if 'dynamic_content' in self.last_analysis['structure_analysis']:
-                dynamic_data = self.last_analysis['structure_analysis']['dynamic_content']
-                
-                if 'mutations' in dynamic_data:
-                    mutation_info = dynamic_data['mutations']
-                    if mutation_info.get('total_mutations', 0) > 0:
-                        recommendations.append({
-                            'type': 'dynamic_content',
-                            'priority': 'high',
-                            'description': "Test dynamic content updates",
-                            'steps': [
-                                "Monitor DOM mutations",
-                                "Verify content updates",
-                                "Check state consistency"
-                            ]
-                        })
+        if not self.last_analysis:
+            return recommendations
 
-        if 'tag_analysis' in self.last_analysis:
-            if 'tag_patterns' in self.last_analysis['tag_analysis']:
-                pattern_data = self.last_analysis['tag_analysis']['tag_patterns']
-                
-                if 'forms' in pattern_data:
-                    for form in pattern_data['forms']:
-                        recommendations.append({
-                            'type': 'form_validation',
-                            'priority': 'high',
-                            'description': f"Test form with {len(form.get('inputs', []))} fields",
-                            'steps': [
-                                "Validate required fields",
-                                "Test input constraints",
-                                "Verify form submission"
-                            ]
-                        })
+        structure_analysis = self.last_analysis.get('structure_analysis', {})
+        if structure_analysis:
+            dynamic_data = structure_analysis.get('dynamic_content', {})
+            
+            mutation_info = dynamic_data.get('mutations', {})
+            if mutation_info.get('total_mutations', 0) > 0:
+                recommendations.append({
+                    'type': 'dynamic_content',
+                    'priority': 'high',
+                    'description': "Test dynamic content updates",
+                    'steps': [
+                        "Monitor DOM mutations",
+                        "Verify content updates",
+                        "Check state consistency"
+                    ]
+                })
+
+        tag_analysis = self.last_analysis.get('tag_analysis', {})
+        if tag_analysis:
+            pattern_data = tag_analysis.get('tag_patterns', {})
+            
+            for form in pattern_data.get('forms', []):
+                recommendations.append({
+                    'type': 'form_validation',
+                    'priority': 'high',
+                    'description': f"Test form with {len(form.get('inputs', []))} fields",
+                    'steps': [
+                        "Validate required fields",
+                        "Test input constraints",
+                        "Verify form submission"
+                    ]
+                })
 
         return recommendations
 
@@ -357,14 +378,14 @@ class WebAnalysisService:
         """Find matches based on semantic structure."""
         matches = []
         
-        if 'header_elements' in semantic_data:
-            for header in semantic_data['header_elements'].get('hierarchy', []):
-                if any(term in header.lower() for term in search_terms):
-                    matches.append({
-                        'type': 'semantic',
-                        'selector': f"h{header}",
-                        'confidence': 0.8
-                    })
+        header_elements = semantic_data.get('header_elements', {})
+        for header in header_elements.get('hierarchy', []):
+            if any(term in str(header).lower() for term in search_terms):
+                matches.append({
+                    'type': 'semantic',
+                    'selector': f"h{header}",
+                    'confidence': 0.8
+                })
         
         return matches
 
@@ -372,14 +393,13 @@ class WebAnalysisService:
         """Find matches based on pattern analysis."""
         matches = []
         
-        if 'lists' in pattern_data:
-            for list_pattern in pattern_data['lists']:
-                if any(term in str(list_pattern).lower() for term in search_terms):
-                    matches.append({
-                        'type': 'pattern',
-                        'selector': f"{list_pattern['type']}",
-                        'confidence': 0.7
-                    })
+        for list_pattern in pattern_data.get('lists', []):
+            if any(term in str(list_pattern).lower() for term in search_terms):
+                matches.append({
+                    'type': 'pattern',
+                    'selector': f"{list_pattern.get('type', '')}",
+                    'confidence': 0.7
+                })
         
         return matches
 
@@ -387,14 +407,13 @@ class WebAnalysisService:
         """Find matches based on attributes."""
         matches = []
         
-        if 'data_attributes' in attribute_data:
-            for attr, count in attribute_data['data_attributes'].items():
-                if any(term in attr.lower() for term in search_terms):
-                    matches.append({
-                        'type': 'attribute',
-                        'selector': f"[{attr}]",
-                        'confidence': 0.6
-                    })
+        for attr, count in attribute_data.get('data_attributes', {}).items():
+            if any(term in attr.lower() for term in search_terms):
+                matches.append({
+                    'type': 'attribute',
+                    'selector': f"[{attr}]",
+                    'confidence': 0.6
+                })
         
         return matches
 
@@ -406,3 +425,113 @@ class WebAnalysisService:
             reverse=True
         )
         return sorted_suggestions[:5]
+
+    def _generate_layout_scenarios(self, element_type: str, layout_data: Dict) -> List[Dict]:
+        """Generate test scenarios for layout elements."""
+        scenarios = []
+        
+        if not layout_data:
+            return scenarios
+            
+        # Test responsive layout behavior
+        if layout_data.get('layout_type') in ['grid', 'flexbox']:
+            scenarios.append({
+                'name': f"Test {layout_data['layout_type']} Layout Responsiveness",
+                'description': f"Verify {layout_data['layout_type']} layout behavior across breakpoints",
+                'priority': 'high',
+                'steps': [
+                    "Verify initial layout",
+                    "Test layout at different viewport sizes",
+                    "Check element alignment and spacing"
+                ]
+            })
+        
+        # Test region-specific scenarios
+        for region in layout_data.get('regions', []):
+            if region.get('type') == element_type:
+                scenarios.append({
+                    'name': f"Test {region['type']} Region Layout",
+                    'description': f"Verify layout of {region['type']} region",
+                    'priority': 'medium',
+                    'steps': [
+                        "Check region positioning",
+                        "Verify content alignment",
+                        "Test nested region behavior"
+                    ]
+                })
+                
+        return scenarios
+    
+    def _generate_component_scenarios(self, element_type: str, component_data: Dict) -> List[Dict]:
+        """Generate test scenarios for UI components."""
+        scenarios = []
+        
+        if not component_data:
+            return scenarios
+            
+        # Test interactive elements
+        for element in component_data.get('interactive_elements', []):
+            if element.get('type') == element_type:
+                scenarios.append({
+                    'name': f"Test {element['type']} Interaction",
+                    'description': f"Verify {element['type']} component behavior",
+                    'priority': 'high',
+                    'steps': [
+                        "Test click/tap interaction",
+                        "Verify state changes",
+                        "Check accessibility features"
+                    ]
+                })
+        
+        # Test form components
+        for form in component_data.get('forms', []):
+            if form.get('type') == element_type:
+                scenarios.append({
+                    'name': f"Test {element_type} Form Component",
+                    'description': "Verify form component functionality",
+                    'priority': 'high',
+                    'steps': [
+                        "Test input validation",
+                        "Verify form submission",
+                        "Check error handling"
+                    ]
+                })
+                
+        return scenarios
+    
+    def _generate_dynamic_scenarios(self, element_type: str, dynamic_data: Dict) -> List[Dict]:
+        """Generate test scenarios for dynamic content."""
+        scenarios = []
+        
+        if not dynamic_data:
+            return scenarios
+            
+        # Test mutation-based scenarios
+        mutations = dynamic_data.get('mutations', {})
+        if mutations.get('total_mutations', 0) > 0:
+            scenarios.append({
+                'name': f"Test Dynamic Content Updates for {element_type}",
+                'description': "Verify dynamic content behavior",
+                'priority': 'high',
+                'steps': [
+                    "Monitor content changes",
+                    "Verify update frequency",
+                    "Check data consistency"
+                ]
+            })
+        
+        # Test loading pattern scenarios
+        loading = dynamic_data.get('loading_patterns', {})
+        if loading.get('lazy_loading') or loading.get('infinite_scroll'):
+            scenarios.append({
+                'name': f"Test Loading Patterns for {element_type}",
+                'description': "Verify content loading behavior",
+                'priority': 'medium',
+                'steps': [
+                    "Test scroll-based loading",
+                    "Verify lazy loading triggers",
+                    "Check loading indicators"
+                ]
+            })
+                
+        return scenarios
