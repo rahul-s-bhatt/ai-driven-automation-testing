@@ -91,16 +91,23 @@ class TestExecutor:
         self.logger.info(f"Analyzing website structure: {self.base_url}")
         
         try:
-            # First analyze website structure
+            # Initialize metrics first
+            self._initialize_metrics()
+            
+            # Analyze website structure
             self.structure_analysis = self.structure_analyzer.analyze_website(self.base_url)
-            self.element_selectors = self.structure_analysis.get('suggested_selectors', {})
+            # Access the nested structure correctly
+            self.element_selectors = self.structure_analysis.get('structure', {}).get('suggested_selectors', {})
             
             self.logger.info("Website structure analysis completed")
             
-            # Collect initial metrics
+            # Collect metrics
             self._collect_performance_metrics()
             self._collect_accessibility_metrics()
             self._initialize_visual_regression()
+            
+            # Update structure analysis with collected metrics
+            self.structure_analysis['structure']['page_metrics'] = self.page_metrics
             
             self.driver.get(self.base_url)
             self.wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
@@ -329,7 +336,7 @@ class TestExecutor:
         try:
             if 'new content' in step.description.lower():
                 # Use structure analysis for content verification
-                if self.structure_analysis['structure']['dynamic_content']['infinite_scroll']:
+                if self.structure_analysis.get('structure', {}).get('dynamic_content', {}).get('infinite_scroll', False):
                     current_height = self.driver.execute_script("return document.body.scrollHeight")
                     assert current_height > self._last_height, "No new content loaded"
                     self._last_height = current_height
@@ -357,7 +364,7 @@ class TestExecutor:
 
         # Use structure analysis for scroll container
         scroll_container = None
-        if self.structure_analysis['structure']['dynamic_content']['infinite_scroll']:
+        if self.structure_analysis.get('structure', {}).get('dynamic_content', {}).get('infinite_scroll', False):
             scroll_container = self.element_selectors['dynamic_content'].get('scroll_container')
 
         if 'till end' in description or 'to end' in description:
@@ -410,8 +417,8 @@ class TestExecutor:
         
         if "new content" in step.description.lower():
             return base_msg + "No new content was detected. Structure analysis shows:\n" + \
-                   f"- Infinite scroll: {self.structure_analysis['structure']['dynamic_content']['infinite_scroll']}\n" + \
-                   f"- Load more: {self.structure_analysis['structure']['dynamic_content']['load_more']}\n" + \
+                   f"- Infinite scroll: {self.structure_analysis.get('structure', {}).get('dynamic_content', {}).get('infinite_scroll', False)}\n" + \
+                   f"- Load more: {self.structure_analysis.get('structure', {}).get('dynamic_content', {}).get('load_more', False)}\n" + \
                    "Try:\n" + \
                    "1. Increasing wait time\n" + \
                    "2. Scrolling more slowly\n" + \
@@ -427,6 +434,19 @@ class TestExecutor:
                    "3. Verifying the element is visible on the page"
         
         return base_msg + str(error)
+
+    def _initialize_metrics(self):
+        """Initialize metrics structure."""
+        self.page_metrics = {
+            'performance': {},
+            'accessibility': {},
+            'visual_regression': {},
+            'cross_browser': {}
+        }
+        # Ensure structure_analysis has the metrics
+        if not self.structure_analysis.get('structure'):
+            self.structure_analysis['structure'] = {}
+        self.structure_analysis['structure']['page_metrics'] = self.page_metrics
 
     def _collect_performance_metrics(self):
         """Collect performance metrics using browser APIs."""
