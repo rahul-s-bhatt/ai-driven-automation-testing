@@ -1,14 +1,23 @@
 {
-    "license_key": "E1710337400-E8B4F12-7A8B9C2D-MD5ABC",
-    "type": "enterprise",
-    "issued_to": "Internal Testing",
+    "license_key": "P1710337400-PRO8F12-7A8B9C2D-MD5ABC",
+    "type": "professional",
+    "issued_to": "Your Company Name",
     "issued_date": "2025-03-03",
     "expiration_date": "2026-03-03",
-    "features": [
-        "parallel_execution",
-        "advanced_reporting",
-        "cloud_execution",
-        "team_collaboration",
-        "custom_integrations"
+    "features": {
+        "parallel_execution": true,
+        "advanced_reporting": true,
+        "cloud_execution": true,
+        "team_collaboration": true,
+        "ci_cd_integration": true,
+        "test_scheduling": true,
+        "advanced_analytics": true,
+        "team_dashboards": true,
+        "support_type": "priority"
+    },
+    "notes": [
+        "Community Edition features included",
+        "Priority support with 24-hour response time",
+        "Up to 10 team members"
     ]
 }

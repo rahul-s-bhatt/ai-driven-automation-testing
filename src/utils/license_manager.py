@@ -11,30 +11,50 @@ from datetime import datetime
 from typing import Dict, Optional, List
 
 class LicenseType:
-    BASIC = "basic"
+    COMMUNITY = "community"
     PROFESSIONAL = "professional"
     ENTERPRISE = "enterprise"
 
 class LicenseFeatures:
     """Features available in different license tiers"""
-    BASIC = {
-        "max_tests": 100,
+    COMMUNITY = {
+        "max_tests": float('inf'),  # Unlimited tests
         "parallel_execution": False,
-        "advanced_reporting": False,
+        "advanced_reporting": True,  # Including advanced reporting
         "cloud_execution": False,
         "team_collaboration": False,
         "custom_integrations": False,
-        "support_sla": "48h"
+        "support_type": "community",
+        "features": {
+            "visual_regression": True,
+            "performance_metrics": True,
+            "accessibility_testing": True,
+            "cross_browser": True,
+            "custom_assertions": True,
+            "data_driven_testing": True
+        }
     }
     
     PROFESSIONAL = {
-        "max_tests": 1000,
+        "max_tests": float('inf'),
         "parallel_execution": True,
         "advanced_reporting": True,
         "cloud_execution": True,
-        "team_collaboration": False,
+        "team_collaboration": True,
         "custom_integrations": False,
-        "support_sla": "24h"
+        "support_type": "priority",
+        "features": {
+            "visual_regression": True,
+            "performance_metrics": True,
+            "accessibility_testing": True,
+            "cross_browser": True,
+            "custom_assertions": True,
+            "data_driven_testing": True,
+            "ci_cd_integration": True,
+            "test_scheduling": True,
+            "advanced_analytics": True,
+            "team_dashboards": True
+        }
     }
     
     ENTERPRISE = {
@@ -44,7 +64,24 @@ class LicenseFeatures:
         "cloud_execution": True,
         "team_collaboration": True,
         "custom_integrations": True,
-        "support_sla": "4h"
+        "support_type": "dedicated",
+        "features": {
+            "visual_regression": True,
+            "performance_metrics": True,
+            "accessibility_testing": True,
+            "cross_browser": True,
+            "custom_assertions": True,
+            "data_driven_testing": True,
+            "ci_cd_integration": True,
+            "test_scheduling": True,
+            "advanced_analytics": True,
+            "team_dashboards": True,
+            "custom_plugins": True,
+            "white_labeling": True,
+            "api_integration": True,
+            "sla_guarantees": True,
+            "training_support": True
+        }
     }
 
 class LicenseManager:

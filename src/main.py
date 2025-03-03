@@ -35,12 +35,12 @@ from src.utils.license_manager import LicenseManager, LicenseFeatures
 def setup_argument_parser() -> argparse.ArgumentParser:
     """Set up command line argument parser."""
     parser = argparse.ArgumentParser(
-        description='Automated Website Testing Framework (Private Edition)'
+        description='Automated Website Testing Framework - A powerful open source testing solution'
     )
     
     parser.add_argument(
         '--license',
-        help='License key for premium features',
+        help='License key for Professional/Enterprise features (Community Edition by default)',
         type=str
     )
     
