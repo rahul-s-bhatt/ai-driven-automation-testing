@@ -42,6 +42,12 @@ class TestExecutor:
         self.logger = self._setup_logger()
         self.structure_analysis = None
         self.element_selectors = {}
+        self.page_metrics = {
+            'performance': {},
+            'accessibility': {},
+            'visual_regression': {},
+            'cross_browser': {}
+        }
 
     def _setup_logger(self):
         """Set up logging configuration."""
@@ -60,10 +66,26 @@ class TestExecutor:
         
         return logger
 
-    def execute_scenario(self, scenario: TestScenario) -> Tuple[bool, List[str]]:
-        """Execute a test scenario with structure analysis."""
+    def execute_scenario(self, scenario: TestScenario) -> Tuple[bool, List[str], Dict]:
+        """
+        Execute a test scenario with structure analysis and metrics collection.
+        
+        Returns:
+            Tuple[bool, List[str], Dict]: A tuple containing:
+                - success: Boolean indicating if the scenario passed
+                - errors: List of error messages if any
+                - metrics: Dictionary containing collected metrics (performance, accessibility, visual regression)
+        """
         if not self.base_url:
             raise ValueError("Base URL is not set")
+        
+        # Reset metrics for new scenario
+        self.page_metrics = {
+            'performance': {},
+            'accessibility': {},
+            'visual_regression': {},
+            'cross_browser': {}
+        }
 
         self.logger.info(f"Executing scenario: {scenario.name}")
         self.logger.info(f"Analyzing website structure: {self.base_url}")
@@ -75,12 +97,17 @@ class TestExecutor:
             
             self.logger.info("Website structure analysis completed")
             
+            # Collect initial metrics
+            self._collect_performance_metrics()
+            self._collect_accessibility_metrics()
+            self._initialize_visual_regression()
+            
             self.driver.get(self.base_url)
             self.wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
         except Exception as e:
             error_msg = f"Failed to analyze website: {str(e)}"
             self.logger.error(error_msg)
-            return False, [error_msg]
+            return False, [error_msg], self.page_metrics
 
         errors = []
         success = True
@@ -99,7 +126,16 @@ class TestExecutor:
                 success = False
                 break
 
-        return success, errors
+        # Log metrics summary before returning
+        self.logger.info("\nTest Metrics Summary:")
+        if self.page_metrics['performance']:
+            self.logger.info(f"Performance: Page Load Time: {self.page_metrics['performance'].get('pageLoadTime', 'N/A')}ms")
+        if self.page_metrics['accessibility']:
+            self.logger.info(f"Accessibility: {self.page_metrics['accessibility'].get('violations', 0)} violations found")
+        if self.page_metrics['visual_regression']:
+            self.logger.info(f"Visual Changes: {self.page_metrics['visual_regression'].get('diff_ratio', 0):.2%} difference")
+
+        return success, errors, self.page_metrics
 
     def _find_element(self, target: str, timeout: int = 10) -> webdriver.Remote:
         """Find an element using enhanced structure analysis and smart strategies."""
@@ -247,7 +283,8 @@ class TestExecutor:
         return None
 
     def _execute_step(self, step: TestStep):
-        """Execute a single test step."""
+        """Execute a single test step and collect metrics."""
+        # Execute the step
         if step.action == ActionType.CLICK:
             self._handle_click(step)
         elif step.action == ActionType.TYPE:
@@ -264,6 +301,10 @@ class TestExecutor:
             self._handle_hover(step)
         elif step.action == ActionType.ASSERT:
             self._handle_assert(step)
+
+        # Collect metrics after each step
+        self._collect_performance_metrics()
+        self._check_visual_regression()
 
     def _handle_click(self, step: TestStep):
         """Handle click action."""
@@ -386,6 +427,106 @@ class TestExecutor:
                    "3. Verifying the element is visible on the page"
         
         return base_msg + str(error)
+
+    def _collect_performance_metrics(self):
+        """Collect performance metrics using browser APIs."""
+        try:
+            timing = self.driver.execute_script("""
+                let timing = performance.timing;
+                return {
+                    'pageLoadTime': timing.loadEventEnd - timing.navigationStart,
+                    'domContentLoaded': timing.domContentLoadedEventEnd - timing.navigationStart,
+                    'firstPaint': performance.getEntriesByType('paint')[0]?.startTime || 0,
+                    'firstContentfulPaint': performance.getEntriesByType('paint')[1]?.startTime || 0
+                }
+            """)
+            self.page_metrics['performance'].update(timing)
+            self.logger.info(f"Performance metrics collected: {timing}")
+        except Exception as e:
+            self.logger.error(f"Error collecting performance metrics: {str(e)}")
+
+    def _collect_accessibility_metrics(self):
+        """Collect accessibility metrics using axe-core."""
+        try:
+            # Inject axe-core if not present
+            self.driver.execute_async_script("""
+                var callback = arguments[arguments.length - 1];
+                if (!window.axe) {
+                    var script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.0/axe.min.js';
+                    script.onload = callback;
+                    document.head.appendChild(script);
+                } else {
+                    callback();
+                }
+            """)
+
+            # Run accessibility tests
+            results = self.driver.execute_async_script("""
+                var callback = arguments[arguments.length - 1];
+                axe.run().then(callback);
+            """)
+
+            self.page_metrics['accessibility'].update({
+                'violations': len(results.get('violations', [])),
+                'passes': len(results.get('passes', [])),
+                'issues': [{'rule': v['id'], 'impact': v['impact']}
+                          for v in results.get('violations', [])]
+            })
+            self.logger.info("Accessibility metrics collected")
+        except Exception as e:
+            self.logger.error(f"Error collecting accessibility metrics: {str(e)}")
+
+    def _initialize_visual_regression(self):
+        """Initialize visual regression testing."""
+        try:
+            # Take baseline screenshot for visual comparison
+            if self.screenshot_dir:
+                baseline_path = self.screenshot_dir / 'baseline.png'
+                self.screenshot_dir.mkdir(parents=True, exist_ok=True)
+                self.driver.save_screenshot(str(baseline_path))
+                self.page_metrics['visual_regression']['baseline'] = str(baseline_path)
+                self.logger.info("Visual regression baseline captured")
+        except Exception as e:
+            self.logger.error(f"Error initializing visual regression: {str(e)}")
+
+    def _check_visual_regression(self):
+        """Compare current page with baseline for visual changes."""
+        try:
+            if not self.screenshot_dir or 'baseline' not in self.page_metrics['visual_regression']:
+                return
+
+            import cv2
+            import numpy as np
+            from PIL import Image
+
+            # Take current screenshot
+            current_path = self.screenshot_dir / 'current.png'
+            self.driver.save_screenshot(str(current_path))
+
+            # Load images
+            baseline = cv2.imread(self.page_metrics['visual_regression']['baseline'])
+            current = cv2.imread(str(current_path))
+
+            # Compare images
+            if baseline.shape == current.shape:
+                diff = cv2.absdiff(baseline, current)
+                diff_ratio = np.count_nonzero(diff) / diff.size
+                
+                self.page_metrics['visual_regression'].update({
+                    'diff_ratio': diff_ratio,
+                    'has_changes': diff_ratio > 0.01  # 1% threshold
+                })
+                
+                if diff_ratio > 0.01:
+                    # Save diff image
+                    diff_path = self.screenshot_dir / 'diff.png'
+                    cv2.imwrite(str(diff_path), diff)
+                    self.page_metrics['visual_regression']['diff_image'] = str(diff_path)
+                
+                self.logger.info(f"Visual regression check completed: {diff_ratio:.2%} difference")
+        except Exception as e:
+            self.logger.error(f"Error checking visual regression: {str(e)}")
 
     def cleanup(self):
         """Clean up resources."""
