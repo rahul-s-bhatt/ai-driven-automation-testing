@@ -117,7 +117,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
         
         if (data.success) {
             // Update metrics
-            if (data.analysis.structure.page_metrics) {
+            if (data.analysis?.structure?.page_metrics) {
                 const metrics = data.analysis.structure.page_metrics;
                 
                 // Update load time display
@@ -218,7 +218,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
 
             // Update forms analysis
             const formsContainer = document.querySelector('.forms-container');
-            if (formsContainer && data.analysis.structure.forms) {
+            if (formsContainer && data.analysis?.structure?.forms) {
                 formsContainer.innerHTML = data.analysis.structure.forms.map(form => `
                     <div class="card">
                         <h5>${form.id || 'Unnamed Form'}</h5>
@@ -241,7 +241,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
 
             // Update navigation structure
             const navContainer = document.querySelector('.navigation-container');
-            if (navContainer && data.analysis.structure.navigation) {
+            if (navContainer && data.analysis?.structure?.navigation) {
                 navContainer.innerHTML = data.analysis.structure.navigation.map(nav => `
                     <div class="card">
                         <h5>${nav.type} Navigation</h5>
@@ -260,7 +260,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
 
             // Update dynamic content section
             const dynamicContainer = document.querySelector('.dynamic-container');
-            if (dynamicContainer && data.analysis.structure.dynamic_content) {
+            if (dynamicContainer && data.analysis?.structure?.dynamic_content) {
                 const dynamic = data.analysis.structure.dynamic_content;
                 dynamicContainer.innerHTML = `
                     <div class="feature-grid">
@@ -282,7 +282,7 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
 
             // Update suggested scenarios
             const suggestedContainer = document.querySelector('.suggestions-container');
-            if (suggestedContainer && data.analysis.structure.suggested_scenarios) {
+            if (suggestedContainer && data.analysis?.structure?.suggested_scenarios) {
                 suggestedContainer.innerHTML = data.analysis.structure.suggested_scenarios
                     .map(scenario => `
                         <div class="card scenario-card">
@@ -303,13 +303,13 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
             }
 
             // Update dual-mode test results
-            if (data.analysis.dual_mode_tests) {
+            if (data.dual_mode_tests) {
                 const dualModeSection = document.getElementById('dual-mode-tests');
                 if (dualModeSection) {
                     // Update human instructions
                     const humanInstructions = dualModeSection.querySelector('.test-instructions');
-                    if (humanInstructions && data.analysis.dual_mode_tests.outputs?.human_instructions) {
-                        fetch(data.analysis.dual_mode_tests.outputs.human_instructions)
+                    if (humanInstructions && data.dual_mode_tests.outputs?.human_instructions) {
+                        fetch(data.dual_mode_tests.outputs.human_instructions)
                             .then(response => response.text())
                             .then(text => {
                                 humanInstructions.innerHTML = marked(text); // Using marked.js for markdown rendering
@@ -323,8 +323,8 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
 
                     // Update automation script
                     const automationCode = dualModeSection.querySelector('.code-preview code');
-                    if (automationCode && data.analysis.dual_mode_tests.outputs?.automation_script) {
-                        fetch(data.analysis.dual_mode_tests.outputs.automation_script)
+                    if (automationCode && data.dual_mode_tests.outputs?.automation_script) {
+                        fetch(data.dual_mode_tests.outputs.automation_script)
                             .then(response => response.text())
                             .then(text => {
                                 automationCode.textContent = text;
@@ -341,7 +341,8 @@ document.getElementById('analyzeForm')?.addEventListener('submit', async (e) => 
             // Show results
             results.style.display = 'block';
         } else {
-            throw new Error(data.error || 'Analysis failed');
+            const errorMsg = data.error || (data.structure ? 'No metrics available' : 'Analysis failed');
+            throw new Error(errorMsg);
         }
     } catch (error) {
         results.innerHTML = `

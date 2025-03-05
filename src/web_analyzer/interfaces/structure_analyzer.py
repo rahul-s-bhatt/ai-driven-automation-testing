@@ -22,9 +22,47 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        # Configure logger
+        if not self.logger.handlers:
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler = logging.StreamHandler()
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)  # Match service logging level
+            
         self._last_content_hash = None
         self._mutation_count = 0
         self._content_update_times = []
+        
+    def _get_empty_structure(self) -> Dict:
+        """Return an empty structure with all required fields."""
+        return {
+            'layout': {},
+            'components': {
+                'reusable_components': [],
+                'interactive_elements': [],
+                'content_blocks': [],
+                'forms': []
+            },
+            'dynamic_content': {
+                'mutations': {},
+                'loading_patterns': {},
+                'ajax_patterns': {},
+                'state_changes': {}
+            },
+            'relationships': {
+                'parent_child': {},
+                'sibling_relationships': [],
+                'containment': {},
+                'dependencies': {}
+            },
+            'accessibility': {
+                'aria_labels': [],
+                'heading_hierarchy': {},
+                'landmarks': [],
+                'alt_texts': {'total_images': 0, 'with_alt': 0, 'without_alt': 0}
+            }
+        }
 
     def analyze_structure(self, soup: BeautifulSoup, driver: webdriver.Remote) -> Dict:
         """
@@ -35,23 +73,57 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
         - DOM mutation tracking
         """
         try:
-            structure_info = {
-                'layout': self._analyze_layout(soup),
-                'components': self._analyze_components(soup),
-                'dynamic_content': self._analyze_dynamic_content(driver),
-                'relationships': self._analyze_relationships(soup),
-                'accessibility': self._analyze_accessibility(soup)
-            }
-            return structure_info
+            # Validate input parameters
+            if not soup:
+                self.logger.error("BeautifulSoup object is None")
+                return self._get_empty_structure()
+                
+            if not driver:
+                self.logger.error("WebDriver object is None")
+                return self._get_empty_structure()
+
+            try:
+                # Ensure page is ready
+                if not soup.find():
+                    self.logger.error("Empty page content")
+                    return self._get_empty_structure()
+
+                navigation_time = driver.execute_script('return window.performance.timing.navigationStart')
+                load_time = driver.execute_script('return window.performance.timing.loadEventEnd - window.performance.timing.navigationStart')
+                load_time = load_time / 1000 if load_time > 0 else 0  # Convert to seconds
+
+                page_metrics = {
+                    'load_time': round(load_time, 2),
+                    'dom_ready': round(load_time * 0.8, 2),  # Approximate DOM ready time
+                    'resources_loaded': len(driver.execute_script('return window.performance.getEntries()')),
+                    'element_counts': self._count_elements(soup)
+                }
+
+                structure_info = {
+                    'structure': {
+                        'page_metrics': page_metrics,
+                        'layout': self._analyze_layout(soup) or {},
+                        'components': self._analyze_components(soup) or {},
+                        'dynamic_content': self._analyze_dynamic_content(driver) or {},
+                        'relationships': self._analyze_relationships(soup) or {},
+                        'accessibility': self._analyze_accessibility(soup) or {}
+                    }
+                }
+                return structure_info
+            except Exception as e:
+                self.logger.error(f"Error in structure analysis: {str(e)}", exc_info=True)
+                return self._get_empty_structure()
         except Exception as e:
             self.logger.error(f"Error in structure analysis: {str(e)}")
             return {
                 'error': str(e),
-                'layout': {},
-                'components': {},
-                'dynamic_content': {},
-                'relationships': {},
-                'accessibility': {}
+                'structure': {
+                    'layout': {},
+                    'components': {},
+                    'dynamic_content': {},
+                    'relationships': {},
+                    'accessibility': {}
+                }
             }
 
     def _analyze_layout(self, soup: BeautifulSoup) -> Dict:
@@ -484,33 +556,89 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
 
     def _analyze_accessibility(self, soup: BeautifulSoup) -> Dict:
         """Analyze accessibility features of the page."""
-        return {
-            'aria_labels': self._find_aria_labels(soup),
-            'heading_hierarchy': self._analyze_heading_structure(soup),
-            'landmarks': self._find_landmark_roles(soup),
-            'alt_texts': self._analyze_alt_texts(soup)
-        }
+        try:
+            if not soup:
+                self.logger.error("Cannot analyze accessibility: BeautifulSoup object is None")
+                return self._get_empty_structure()['accessibility']
+
+            self.logger.debug("Starting accessibility analysis...")
+            result = {
+                'aria_labels': self._find_aria_labels(soup),
+                'heading_hierarchy': self._analyze_heading_structure(soup),
+                'landmarks': self._find_landmark_roles(soup),
+                'alt_texts': self._analyze_alt_texts(soup)
+            }
+            self.logger.debug("Completed accessibility analysis")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error in accessibility analysis: {str(e)}", exc_info=True)
+            return self._get_empty_structure()['accessibility']
 
     def _find_aria_labels(self, soup: BeautifulSoup) -> List[Dict]:
         """Find and analyze ARIA labels."""
         aria_elements = []
-        for tag in soup.find_all(attrs=lambda x: any(k.startswith('aria-') for k in x.keys() if k)):
-            aria_attrs = {k: v for k, v in tag.attrs.items() if k.startswith('aria-')}
-            if aria_attrs:
-                aria_elements.append({
-                    'element': tag.name,
-                    'attributes': aria_attrs
-                })
+        try:
+            def is_aria_element(attrs):
+                if not attrs:  # Handle None or empty attributes
+                    return False
+                try:
+                    return any(k and k.startswith('aria-') for k in attrs.keys())
+                except (AttributeError, TypeError):
+                    return False
+
+            for tag in soup.find_all(attrs=is_aria_element):
+                try:
+                    aria_attrs = {k: str(v) for k, v in tag.attrs.items()
+                                if k and k.startswith('aria-')}
+                    if aria_attrs:
+                        aria_elements.append({
+                            'element': tag.name,
+                            'attributes': aria_attrs
+                        })
+                except (AttributeError, TypeError) as e:
+                    self.logger.debug(f"Skipping malformed tag attributes: {e}")
+                    continue
+
+        except Exception as e:
+            self.logger.error(f"Error finding ARIA labels: {str(e)}", exc_info=True)
+
         return aria_elements
 
     def _analyze_alt_texts(self, soup: BeautifulSoup) -> Dict:
         """Analyze alt text usage in images."""
-        images = soup.find_all('img')
-        return {
-            'total_images': len(images),
-            'with_alt': len([img for img in images if img.get('alt')]),
-            'without_alt': len([img for img in images if not img.get('alt')])
-        }
+        try:
+            if not soup:
+                self.logger.debug("Cannot analyze alt texts: BeautifulSoup object is None")
+                return {'total_images': 0, 'with_alt': 0, 'without_alt': 0}
+
+            self.logger.debug("Analyzing alt text usage in images...")
+            images = soup.find_all('img')
+            
+            with_alt = 0
+            without_alt = 0
+            
+            for img in images:
+                try:
+                    if img and img.get('alt'):
+                        with_alt += 1
+                    else:
+                        without_alt += 1
+                except (AttributeError, TypeError) as e:
+                    self.logger.debug(f"Error processing image tag: {e}")
+                    without_alt += 1
+                    
+            result = {
+                'total_images': len(images),
+                'with_alt': with_alt,
+                'without_alt': without_alt
+            }
+            self.logger.debug(f"Alt text analysis complete: {result}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing alt texts: {str(e)}", exc_info=True)
+            return {'total_images': 0, 'with_alt': 0, 'without_alt': 0}
 
     def _analyze_loading_patterns(self, driver: webdriver.Remote) -> Dict:
         """Analyze page loading patterns."""
@@ -601,6 +729,12 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
         except Exception as e:
             self.logger.error(f"Error finding dynamic elements: {str(e)}")
             return []
+    def _count_elements(self, soup: BeautifulSoup) -> Dict:
+        """Count elements by their type."""
+        counts = {}
+        for tag in soup.find_all():
+            counts[tag.name] = counts.get(tag.name, 0) + 1
+        return counts
             
     def _analyze_component_dependencies(self, soup: BeautifulSoup) -> Dict:
         """Analyze dependencies between components based on DOM relationships and interactions."""

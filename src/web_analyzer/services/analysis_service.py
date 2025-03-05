@@ -20,15 +20,32 @@ class WebAnalysisService:
         """Initialize the analysis service with required analyzers."""
         self.driver = driver
         self.logger = logging.getLogger(__name__)
-        self.tag_analyzer = SmartTagAnalyzer()
-        self.structure_analyzer = EnhancedStructureAnalyzer()
-        self.current_page_source = None
-        self.current_soup = None
-        self.last_analysis = None
+        
+        # Configure logger
+        if not self.logger.handlers:
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler = logging.StreamHandler()
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)  # Reduce logging verbosity
+            
+        self.logger.info("Initializing WebAnalysisService")
+        
+        try:
+            self.tag_analyzer = SmartTagAnalyzer()
+            self.structure_analyzer = EnhancedStructureAnalyzer()
+            self.current_page_source = None
+            self.current_soup = None
+            self.last_analysis = None
 
-        # Initialize dual-mode components
-        self.human_generator = HumanInstructionsGenerator()
-        self.automation_generator = AutomationGenerator()
+            # Initialize dual-mode components
+            self.human_generator = HumanInstructionsGenerator()
+            self.automation_generator = AutomationGenerator()
+            
+            self.logger.info("Successfully initialized all analyzers and components")
+        except Exception as e:
+            self.logger.error(f"Error initializing service: {str(e)}", exc_info=True)
+            raise
 
     def analyze_page(self, url: str) -> Dict:
         """
@@ -41,7 +58,7 @@ class WebAnalysisService:
             Dict containing analysis results including dual-mode tests
         """
         try:
-            self.logger.info(f"Starting enhanced analysis of {url}")
+            self.logger.info("Starting analysis")
             
             # Load and parse page
             self._load_page(url)
@@ -49,29 +66,89 @@ class WebAnalysisService:
                 raise ValueError("Failed to parse page content")
 
             # Perform analysis using enhanced components
+            # Get all analysis results
+            tag_analysis = self._perform_tag_analysis()
+            structure_analysis = self._perform_structure_analysis()
+            
+            # Create properly structured analysis result with metrics
             analysis_result = {
                 'url': url,
-                'tag_analysis': self._perform_tag_analysis(),
-                'structure_analysis': self._perform_structure_analysis(),
-                'element_suggestions': self._generate_element_suggestions(),
-                'test_recommendations': self._generate_test_recommendations(),
-                'dual_mode_tests': self._generate_dual_mode_tests()
+                'tag_analysis': tag_analysis or {},
+                'structure_analysis': structure_analysis or {'structure': {}},
+                'analysis': {
+                    'structure': structure_analysis or {}
+                },
+                'element_suggestions': self._generate_element_suggestions() or [],
+                'test_recommendations': self._generate_test_recommendations() or [],
+                'dual_mode_tests': self._generate_dual_mode_tests() or {}
             }
 
+            # Ensure the nested structure is complete even if analysis failed
+            structure_data = analysis_result.get('structure_analysis', {}).get('structure', {})
+            if not structure_data.get('page_metrics'):
+                structure_data['page_metrics'] = {
+                    'performance': {
+                        'load_time': 0,
+                        'dom_ready': 0,
+                        'resources_loaded': 0
+                    },
+                    'accessibility': {},
+                    'dynamic_content': {},
+                    'component_metrics': {
+                        'total_components': 0,
+                        'interactive_elements': 0,
+                        'forms': 0
+                    }
+                }
+            
             self.last_analysis = analysis_result
             return analysis_result
 
         except Exception as e:
             self.logger.error(f"Error during page analysis: {str(e)}")
-            return {
+            error_result = {
                 'error': str(e),
                 'url': url,
                 'tag_analysis': {},
-                'structure_analysis': {},
+                'structure_analysis': {
+                    'structure': {
+                        'layout': {},
+                        'components': {
+                            'reusable_components': [],
+                            'interactive_elements': [],
+                            'forms': []
+                        },
+                        'dynamic_content': {},
+                        'relationships': {},
+                        'accessibility': {}
+                    }
+                },
+                'analysis': {
+                    'structure': {
+                        'page_metrics': {
+                            'load_time': 0,
+                            'dom_ready': 0,
+                            'resources_loaded': 0,
+                            'element_counts': {}
+                        },
+                        'layout': {},
+                        'components': {
+                            'reusable_components': [],
+                            'interactive_elements': [],
+                            'forms': []
+                        },
+                        'dynamic_content': {},
+                        'relationships': {},
+                        'accessibility': {}
+                    }
+                },
                 'element_suggestions': [],
                 'test_recommendations': [],
                 'dual_mode_tests': {}
             }
+            self.last_analysis = error_result  # Ensure last_analysis is also updated
+            self.logger.debug(f"Returning error result with complete structure")
+            return error_result
 
     def _generate_dual_mode_tests(self) -> Dict:
         """Generate both human and automated test scenarios based on analysis."""
@@ -87,7 +164,7 @@ class WebAnalysisService:
                 scenarios.append(scenario)
 
         # Generate scenarios based on structure analysis
-        structure_data = self.last_analysis.get('structure_analysis', {})
+        structure_data = self.last_analysis.get('structure_analysis', {}).get('structure', {})
         if 'components' in structure_data:
             for scenario in self._create_component_test_scenarios(structure_data['components']):
                 scenarios.append(scenario)
@@ -227,7 +304,7 @@ class WebAnalysisService:
 
         try:
             scenarios = []
-            structure_data = self.last_analysis.get('structure_analysis', {})
+            structure_data = self.last_analysis.get('structure_analysis', {}).get('structure', {})
             
             if structure_data:
                 if 'layout' in structure_data:
@@ -254,28 +331,114 @@ class WebAnalysisService:
     def _load_page(self, url: str) -> None:
         """Load and parse page content."""
         try:
+            self.logger.debug(f"Attempting to load URL: {url}")
             self.driver.get(url)
+            
+            # Wait for page load
+            self.logger.debug("Waiting for page to load completely...")
+            self.driver.execute_script("return document.readyState") == 'complete'
+            
             self.current_page_source = self.driver.page_source
+            if not self.current_page_source:
+                raise ValueError("Empty page source received")
+                
+            self.logger.debug("Parsing page content with BeautifulSoup")
             self.current_soup = BeautifulSoup(self.current_page_source, 'lxml')
+            
+            if not self.current_soup.find():
+                raise ValueError("BeautifulSoup parser returned empty document")
+                
+            self.logger.debug("Page successfully loaded and parsed")
+            
         except Exception as e:
-            self.logger.error(f"Error loading page: {str(e)}")
+            self.logger.error("Error loading page", exc_info=False)
+            self.current_page_source = None
+            self.current_soup = None
             raise
 
     def _perform_tag_analysis(self) -> Dict:
         """Perform enhanced tag analysis."""
+        default_tags = {
+            'semantic_structure': {
+                'header_elements': {'hierarchy': []},
+                'navigation_elements': {'primary_nav': None}
+            },
+            'tag_patterns': {'forms': []},
+            'key_attributes': {'data_attributes': {}}
+        }
+        
         try:
-            return self.tag_analyzer.analyze_tags(self.current_soup) or {}
+            result = self.tag_analyzer.analyze_tags(self.current_soup)
+            if not result:
+                self.logger.warning("Tag analyzer returned empty result")
+                return default_tags
+                
+            # Ensure required structure exists
+            for key, default_value in default_tags.items():
+                if key not in result:
+                    result[key] = default_value
+                    
+            return result
+            
         except Exception as e:
-            self.logger.error(f"Error in tag analysis: {str(e)}")
-            return {}
+            self.logger.error(f"Error in tag analysis: {str(e)}", exc_info=True)
+            return default_tags
 
     def _perform_structure_analysis(self) -> Dict:
         """Perform enhanced structure analysis."""
+        default_structure = {
+            'page_metrics': {
+                'performance': {
+                    'load_time': 0,
+                    'dom_ready': 0,
+                    'resources_loaded': 0
+                },
+                'accessibility': {},
+                'dynamic_content': {},
+                'component_metrics': {
+                    'total_components': 0,
+                    'interactive_elements': 0,
+                    'forms': 0
+                }
+            },
+            'layout': {},
+            'components': {
+                'reusable_components': [],
+                'interactive_elements': [],
+                'forms': []
+            },
+            'dynamic_content': {},
+            'relationships': {},
+            'accessibility': {}
+        }
+        
         try:
-            return self.structure_analyzer.analyze_structure(self.current_soup, self.driver) or {}
+            if not self.current_soup:
+                self.logger.error("Cannot perform structure analysis: BeautifulSoup object is None")
+                return default_structure
+                
+            if not self.current_soup.find():
+                self.logger.error("Cannot perform structure analysis: Empty document")
+                return default_structure
+                
+            self.logger.debug("Starting structure analysis...")
+            result = self.structure_analyzer.analyze_structure(self.current_soup, self.driver)
+            
+            if result is None:
+                self.logger.warning("Structure analyzer returned None")
+                return default_structure
+            
+            # Ensure all required fields exist in the result
+            for key in default_structure:
+                if key not in result:
+                    result[key] = default_structure[key]
+                    
+            self.logger.debug(f"Structure analysis completed successfully: {result}")
+            return result
+            
         except Exception as e:
-            self.logger.error(f"Error in structure analysis: {str(e)}")
-            return {}
+            self.logger.error(f"Error in structure analysis: {str(e)}", exc_info=True)
+            return default_structure
 
     def _generate_element_suggestions(self) -> List[Dict]:
         """Generate smart element suggestions based on analysis."""
@@ -310,7 +473,7 @@ class WebAnalysisService:
                 })
 
         # Handle structure analysis suggestions
-        structure_analysis = self.last_analysis.get('structure_analysis', {})
+        structure_analysis = self.last_analysis.get('structure_analysis', {}).get('structure', {})
         if structure_analysis:
             component_data = structure_analysis.get('components', {})
             
@@ -333,7 +496,7 @@ class WebAnalysisService:
         if not self.last_analysis:
             return recommendations
 
-        structure_analysis = self.last_analysis.get('structure_analysis', {})
+        structure_analysis = self.last_analysis.get('structure_analysis', {}).get('structure', {})
         if structure_analysis:
             dynamic_data = structure_analysis.get('dynamic_content', {})
             
