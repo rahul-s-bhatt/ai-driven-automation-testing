@@ -3,13 +3,27 @@ services:
     name: web-testing-framework
     env: python
     buildCommand: |
+      # Install system dependencies
+      apt-get update && apt-get install -y \
+        python3-dev \
+        libyaml-dev \
+        gcc \
+        make
+      # Upgrade pip and install build tools
+      pip install --upgrade pip wheel setuptools
+      # Install project dependencies
       pip install -r requirements.txt
-      playwright install chromium
-      playwright install-deps
+      # Install Playwright and its dependencies
+      playwright install chromium --with-deps
     startCommand: python run_web_interface.py
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: PORT
         value: "10000"
+      # Ensure UTF-8 encoding
+      - key: LANG
+        value: "C.UTF-8"
+      - key: PYTHONIOENCODING
+        value: "UTF-8"
     healthCheckPath: /
