@@ -58,8 +58,18 @@ def setup_webdriver(headless=True):
         if headless:
             options.add_argument('--disable-software-rasterizer')
             options.add_argument('--disable-setuid-sandbox')
+        
+        # Use environment variables for Chrome and ChromeDriver paths if available
+        chrome_binary = os.environ.get('CHROME_BIN')
+        if chrome_binary:
+            options.binary_location = chrome_binary
             
-        service = ChromeService(ChromeDriverManager().install())
+        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH')
+        if chromedriver_path:
+            service = ChromeService(chromedriver_path)
+        else:
+            service = ChromeService(ChromeDriverManager().install())
+            
         return webdriver.Chrome(service=service, options=options)
     except Exception as e:
         logger.error(f"Failed to setup WebDriver: {str(e)}")
@@ -290,4 +300,5 @@ def serve_test_output(filename):
         }), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
