@@ -34,11 +34,15 @@ Press Ctrl+C to stop the server
         app.run(debug=True)
 
     except ImportError as e:
-        print("Error: Missing required dependencies.")
+        print(f"Error: Import failed - {str(e)}")
+        print(f"Python path: {sys.path}")
+        print("Current directory:", os.getcwd())
         print("Please run: pip install -r requirements.txt")
         return 1
     except Exception as e:
         print(f"Error starting web interface: {str(e)}")
+        print(f"Python path: {sys.path}")
+        print("Current directory:", os.getcwd())
         return 1
 
 if __name__ == '__main__':
