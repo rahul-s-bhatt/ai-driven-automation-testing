@@ -60,27 +60,45 @@ def setup_webdriver(headless=True):
             options.add_argument('--disable-software-rasterizer')
             options.add_argument('--disable-setuid-sandbox')
         
-        # Try to find Chrome/Chromium binary
-        chrome_paths = [
-            # Linux paths - Chromium first since it's more commonly preinstalled
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-            "/snap/bin/chromium",
-            "/usr/bin/chromium-chromium",
-            "/usr/lib/chromium/chromium",
-            "/usr/lib/chromium-browser/chromium-browser",
-            # Linux Chrome paths
-            "/usr/bin/google-chrome",
-            "/usr/bin/google-chrome-stable",
-            # Windows paths
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            os.environ.get('PROGRAMFILES', '') + r"\Google\Chrome\Application\chrome.exe",
-            os.environ.get('PROGRAMFILES(X86)', '') + r"\Google\Chrome\Application\chrome.exe",
-            # MacOS paths
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Chromium.app/Contents/MacOS/Chromium"
+        # Check if running on Render.com
+        is_render = os.environ.get('RENDER') == 'true'
+        
+        # Get project root directory and local chrome paths
+        project_root = Path(__file__).resolve().parent.parent.parent
+        local_chrome_paths = [
+            str(project_root / 'bin' / 'chrome-linux' / 'chrome'),
+            str(project_root / 'bin' / 'chrome' / 'chrome'),
+            str(project_root / 'bin' / 'chromium' / 'chrome')
         ]
+        
+        # Try to find Chrome/Chromium binary
+        chrome_paths = []
+        
+        # Always check local project paths first
+        chrome_paths.extend(local_chrome_paths)
+        
+        # On Render.com, only use local project paths
+        if not is_render:
+            chrome_paths.extend([
+                # Linux paths - Chromium first
+                "/usr/bin/chromium",
+                "/usr/bin/chromium-browser",
+                "/snap/bin/chromium",
+                "/usr/bin/chromium-chromium",
+                "/usr/lib/chromium/chromium",
+                "/usr/lib/chromium-browser/chromium-browser",
+                # Linux Chrome paths
+                "/usr/bin/google-chrome",
+                "/usr/bin/google-chrome-stable",
+                # Windows paths
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                os.environ.get('PROGRAMFILES', '') + r"\Google\Chrome\Application\chrome.exe",
+                os.environ.get('PROGRAMFILES(X86)', '') + r"\Google\Chrome\Application\chrome.exe",
+                # MacOS paths
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Chromium.app/Contents/MacOS/Chromium"
+            ])
         
         # Use environment variable if set, otherwise search common paths
         chrome_binary = os.environ.get('CHROME_BIN')
@@ -94,13 +112,26 @@ def setup_webdriver(headless=True):
                     options.binary_location = path
                     break
             else:
-                raise FileNotFoundError(
-                    "Neither Chrome nor Chromium found. Please either:\n"
-                    "1. Install Chrome: https://www.google.com/chrome\n"
-                    "2. Install Chromium: sudo apt install chromium-browser (Ubuntu/Debian) or sudo dnf install chromium (Fedora)\n"
-                    "3. Set CHROME_BIN environment variable to your browser binary location\n"
-                    "Example: export CHROME_BIN=/usr/bin/chromium"
+                portable_chrome_msg = (
+                    "For Render.com deployment or if you can't install Chrome/Chromium system-wide:\n"
+                    "1. Download Chrome headless shell from https://download-chromium.appspot.com\n"
+                    "2. Extract it to the 'bin/chrome-linux' directory in your project\n"
+                    "3. Make it executable with: chmod +x bin/chrome-linux/chrome"
                 )
+                
+                if is_render:
+                    raise FileNotFoundError(
+                        f"Chrome/Chromium not found in project's bin directory. "
+                        f"This is required for Render.com deployment.\n\n{portable_chrome_msg}"
+                    )
+                else:
+                    raise FileNotFoundError(
+                        "Neither Chrome nor Chromium found. Please either:\n"
+                        "1. Install Chrome: https://www.google.com/chrome\n"
+                        "2. Install Chromium: sudo apt install chromium-browser (Ubuntu/Debian) or sudo dnf install chromium (Fedora)\n"
+                        "3. Set CHROME_BIN environment variable to your browser binary location\n"
+                        f"4. Use portable Chrome (recommended for Render.com):\n{portable_chrome_msg}"
+                    )
         
         try:
             # Try to install/update ChromeDriver
