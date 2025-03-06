@@ -60,18 +60,26 @@ def setup_webdriver(headless=True):
             options.add_argument('--disable-software-rasterizer')
             options.add_argument('--disable-setuid-sandbox')
         
-        # Try to find Chrome binary
+        # Try to find Chrome/Chromium binary
         chrome_paths = [
+            # Linux paths - Chromium first since it's more commonly preinstalled
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/snap/bin/chromium",
+            "/usr/bin/chromium-chromium",
+            "/usr/lib/chromium/chromium",
+            "/usr/lib/chromium-browser/chromium-browser",
+            # Linux Chrome paths
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
             # Windows paths
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
             os.environ.get('PROGRAMFILES', '') + r"\Google\Chrome\Application\chrome.exe",
             os.environ.get('PROGRAMFILES(X86)', '') + r"\Google\Chrome\Application\chrome.exe",
-            # Linux paths
-            "/usr/bin/google-chrome",
-            "/usr/bin/chromium-browser",
             # MacOS paths
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium"
         ]
         
         # Use environment variable if set, otherwise search common paths
@@ -87,8 +95,11 @@ def setup_webdriver(headless=True):
                     break
             else:
                 raise FileNotFoundError(
-                    "Chrome not found. Please install Chrome or set CHROME_BIN "
-                    "environment variable to your Chrome binary location."
+                    "Neither Chrome nor Chromium found. Please either:\n"
+                    "1. Install Chrome: https://www.google.com/chrome\n"
+                    "2. Install Chromium: sudo apt install chromium-browser (Ubuntu/Debian) or sudo dnf install chromium (Fedora)\n"
+                    "3. Set CHROME_BIN environment variable to your browser binary location\n"
+                    "Example: export CHROME_BIN=/usr/bin/chromium"
                 )
         
         try:
