@@ -24,9 +24,7 @@ from src.web_analyzer.element_classifier import ElementClassifier
 from src.web_analyzer.structure_analyzer import StructureAnalyzer
 from src.web_analyzer.scraping_analyzer import ScrapingAnalyzer
 from src.web_analyzer.services.analysis_service import WebAnalysisService
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
@@ -37,129 +35,31 @@ logger = logging.getLogger(__name__)
 # Initialize with temporary directory for test outputs
 app.config['TEST_OUTPUT_DIR'] = tempfile.mkdtemp()
 
-def setup_webdriver(headless=True):
-    """Set up and configure WebDriver."""
+def setup_browser(headless=True):
+    """Set up and configure Playwright browser."""
     try:
-        # Initialize ChromeOptions
-        options = webdriver.ChromeOptions()
+        # Initialize Playwright
+        playwright = sync_playwright().start()
         
-        if headless:
-            options.add_argument('--headless=new')  # Use new headless mode
-            
-        # Common options for stability
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument('--disable-infobars')
-        options.add_argument('--disable-extensions')
-        options.add_argument('--disable-notifications')
+        # Launch browser with appropriate options
+        browser = playwright.chromium.launch(
+            headless=headless,
+            args=['--disable-dev-shm-usage']  # Helpful for containerized environments
+        )
         
-        # Additional performance options for headless mode
-        if headless:
-            options.add_argument('--disable-software-rasterizer')
-            options.add_argument('--disable-setuid-sandbox')
+        # Create a new browser context with viewport size
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080}
+        )
         
-        # Check if running on Render.com
-        is_render = os.environ.get('RENDER') == 'true'
+        # Create a new page
+        page = context.new_page()
+        logger.info("Playwright browser initialized successfully")
         
-        # Get project root directory and local chrome paths
-        project_root = Path(__file__).resolve().parent.parent.parent
-        local_chrome_paths = [
-            str(project_root / 'bin' / 'chrome-linux' / 'chrome'),
-            str(project_root / 'bin' / 'chrome' / 'chrome'),
-            str(project_root / 'bin' / 'chromium' / 'chrome')
-        ]
+        return playwright, browser, page
         
-        # Try to find Chrome/Chromium binary
-        chrome_paths = []
-        
-        # Always check local project paths first
-        chrome_paths.extend(local_chrome_paths)
-        
-        # On Render.com, only use local project paths
-        if not is_render:
-            chrome_paths.extend([
-                # Linux paths - Chromium first
-                "/usr/bin/chromium",
-                "/usr/bin/chromium-browser",
-                "/snap/bin/chromium",
-                "/usr/bin/chromium-chromium",
-                "/usr/lib/chromium/chromium",
-                "/usr/lib/chromium-browser/chromium-browser",
-                # Linux Chrome paths
-                "/usr/bin/google-chrome",
-                "/usr/bin/google-chrome-stable",
-                # Windows paths
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                os.environ.get('PROGRAMFILES', '') + r"\Google\Chrome\Application\chrome.exe",
-                os.environ.get('PROGRAMFILES(X86)', '') + r"\Google\Chrome\Application\chrome.exe",
-                # MacOS paths
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "/Applications/Chromium.app/Contents/MacOS/Chromium"
-            ])
-        
-        # Use environment variable if set, otherwise search common paths
-        chrome_binary = os.environ.get('CHROME_BIN')
-        if chrome_binary:
-            if not os.path.exists(chrome_binary):
-                raise FileNotFoundError(f"Chrome binary not found at {chrome_binary}")
-            options.binary_location = chrome_binary
-        else:
-            for path in chrome_paths:
-                if os.path.exists(path):
-                    options.binary_location = path
-                    break
-            else:
-                portable_chrome_msg = (
-                    "For Render.com deployment or if you can't install Chrome/Chromium system-wide:\n"
-                    "1. Download Chrome headless shell from https://download-chromium.appspot.com\n"
-                    "2. Extract it to the 'bin/chrome-linux' directory in your project\n"
-                    "3. Make it executable with: chmod +x bin/chrome-linux/chrome"
-                )
-                
-                if is_render:
-                    raise FileNotFoundError(
-                        f"Chrome/Chromium not found in project's bin directory. "
-                        f"This is required for Render.com deployment.\n\n{portable_chrome_msg}"
-                    )
-                else:
-                    raise FileNotFoundError(
-                        "Neither Chrome nor Chromium found. Please either:\n"
-                        "1. Install Chrome: https://www.google.com/chrome\n"
-                        "2. Install Chromium: sudo apt install chromium-browser (Ubuntu/Debian) or sudo dnf install chromium (Fedora)\n"
-                        "3. Set CHROME_BIN environment variable to your browser binary location\n"
-                        f"4. Use portable Chrome (recommended for Render.com):\n{portable_chrome_msg}"
-                    )
-        
-        try:
-            # Try to install/update ChromeDriver
-            service = ChromeService(ChromeDriverManager().install())
-        except Exception as driver_error:
-            logger.error(f"Failed to setup ChromeDriver: {str(driver_error)}")
-            raise Exception(
-                "Failed to setup ChromeDriver. Please ensure you have Chrome installed "
-                "and your system allows ChromeDriver installation. Error: " + str(driver_error)
-            )
-            
-        try:
-            # Initialize Chrome driver
-            driver = webdriver.Chrome(service=service, options=options)
-            logger.info("Chrome WebDriver initialized successfully")
-            return driver
-        except Exception as chrome_error:
-            logger.error(f"Failed to initialize Chrome: {str(chrome_error)}")
-            raise Exception(
-                "Failed to initialize Chrome. Please ensure Chrome is installed "
-                "and not being blocked by your system. Error: " + str(chrome_error)
-            )
-            
-    except FileNotFoundError as e:
-        logger.error(f"Chrome not found: {str(e)}")
-        raise
     except Exception as e:
-        logger.error(f"Failed to setup WebDriver: {str(e)}")
+        logger.error(f"Failed to setup Playwright browser: {str(e)}")
         raise
 
 @app.route('/')
@@ -180,15 +80,19 @@ def analyze_site():
                 'error': 'URL is required'
             }), 400
 
-        # Set up WebDriver in headless mode
-        driver = setup_webdriver(headless=True)
+        # Set up Playwright browser in headless mode
+        playwright, browser, page = setup_browser(headless=True)
         
         try:
-            # Initialize analysis service
-            analysis_service = WebAnalysisService(driver)
+            # Navigate to the URL
+            page.goto(url)
+            page.wait_for_load_state('networkidle')
+            
+            # Initialize analysis service with the page object
+            analysis_service = WebAnalysisService(page)
             
             # Analyze website
-            analysis_results = analysis_service.analyze_page(url)
+            analysis_results = analysis_service.analyze_page()
 
             # Generate test output files
             if 'dual_mode_tests' in analysis_results:
@@ -225,8 +129,13 @@ def analyze_site():
             })
         
         finally:
-            if driver:
-                driver.quit()
+            # Clean up Playwright resources
+            if page:
+                page.close()
+            if browser:
+                browser.close()
+            if playwright:
+                playwright.stop()
 
     except Exception as e:
         logger.error("Error analyzing website", exc_info=True)
@@ -248,15 +157,19 @@ def analyze_scraping():
                 'error': 'URL is required'
             }), 400
 
-        # Set up WebDriver in headless mode
-        driver = setup_webdriver(headless=True)
+        # Set up Playwright browser in headless mode
+        playwright, browser, page = setup_browser(headless=True)
         
         try:
-            # Initialize scraping analyzer
-            analyzer = ScrapingAnalyzer(driver)
+            # Navigate to the URL
+            page.goto(url)
+            page.wait_for_load_state('networkidle')
+            
+            # Initialize scraping analyzer with page object
+            analyzer = ScrapingAnalyzer(page)
             
             # Analyze website
-            analysis_results = analyzer.analyze_page(url)
+            analysis_results = analyzer.analyze_page()
             
             return jsonify({
                 'success': True,
@@ -264,8 +177,13 @@ def analyze_scraping():
             })
         
         finally:
-            if driver:
-                driver.quit()
+            # Clean up Playwright resources
+            if page:
+                page.close()
+            if browser:
+                browser.close()
+            if playwright:
+                playwright.stop()
 
     except Exception as e:
         logger.error("Error analyzing website for scraping", exc_info=True)
@@ -321,14 +239,14 @@ def run_test():
                 'error': 'No test scenarios found'
             })
 
-        # Set up WebDriver in non-headless mode for test execution
+        # Set up Playwright browser in non-headless mode for test execution
         # Tests need visible browser for accurate interaction
-        driver = setup_webdriver(headless=False)
+        playwright, browser, page = setup_browser(headless=False)
         
         try:
-            # Initialize test executor
+            # Initialize test executor with Playwright page
             executor = TestExecutor(
-                driver=driver,
+                page=page,
                 screenshot_dir=str(screenshots_dir),
                 base_url=url
             )
@@ -352,8 +270,13 @@ def run_test():
             })
 
         finally:
-            if driver:
-                driver.quit()
+            # Clean up Playwright resources
+            if page:
+                page.close()
+            if browser:
+                browser.close()
+            if playwright:
+                playwright.stop()
 
     except Exception as e:
         logger.error(f"Error running tests: {str(e)}", exc_info=True)

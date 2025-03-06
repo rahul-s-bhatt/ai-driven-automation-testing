@@ -1,23 +1,15 @@
 services:
   - type: web
-    name: automation-testing
-    runtime: python
-    pythonVersion: 3.11.0
+    name: web-testing-framework
+    env: python
     buildCommand: |
-      apt-get update && apt-get install -y python3-opencv
-      python -m pip install --upgrade pip
-      python -m pip install -v --no-cache-dir -r requirements.txt
-      python setup_chrome.py
-    startCommand: |
-      export PYTHONPATH="/opt/render/project/src:${PYTHONPATH:-}"
-      python -m pip install -v -r requirements.txt
-      FLASK_ENV=production PORT=5000 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 python -u run_web_interface.py
-    port: 5000
-    plan: free
-    autoDeploy: true
-    healthCheckPath: /
+      pip install -r requirements.txt
+      playwright install chromium
+      playwright install-deps
+    startCommand: python run_web_interface.py
     envVars:
       - key: PYTHONUNBUFFERED
-        value: "true"
-      - key: CHROME_BIN
-        value: /opt/render/project/bin/chrome-linux/chrome
+        value: "1"
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /
