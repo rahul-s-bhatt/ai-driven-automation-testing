@@ -40,12 +40,13 @@ app.config['TEST_OUTPUT_DIR'] = tempfile.mkdtemp()
 def setup_webdriver(headless=True):
     """Set up and configure WebDriver."""
     try:
+        # Initialize ChromeOptions
         options = webdriver.ChromeOptions()
         
         if headless:
-            options.add_argument('--headless')  # Enable headless mode
+            options.add_argument('--headless=new')  # Use new headless mode
             
-        # Common options
+        # Common options for stability
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
@@ -59,18 +60,62 @@ def setup_webdriver(headless=True):
             options.add_argument('--disable-software-rasterizer')
             options.add_argument('--disable-setuid-sandbox')
         
-        # Use environment variables for Chrome and ChromeDriver paths if available
+        # Try to find Chrome binary
+        chrome_paths = [
+            # Windows paths
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.environ.get('PROGRAMFILES', '') + r"\Google\Chrome\Application\chrome.exe",
+            os.environ.get('PROGRAMFILES(X86)', '') + r"\Google\Chrome\Application\chrome.exe",
+            # Linux paths
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium-browser",
+            # MacOS paths
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ]
+        
+        # Use environment variable if set, otherwise search common paths
         chrome_binary = os.environ.get('CHROME_BIN')
         if chrome_binary:
+            if not os.path.exists(chrome_binary):
+                raise FileNotFoundError(f"Chrome binary not found at {chrome_binary}")
             options.binary_location = chrome_binary
-            
-        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH')
-        if chromedriver_path:
-            service = ChromeService(chromedriver_path)
         else:
+            for path in chrome_paths:
+                if os.path.exists(path):
+                    options.binary_location = path
+                    break
+            else:
+                raise FileNotFoundError(
+                    "Chrome not found. Please install Chrome or set CHROME_BIN "
+                    "environment variable to your Chrome binary location."
+                )
+        
+        try:
+            # Try to install/update ChromeDriver
             service = ChromeService(ChromeDriverManager().install())
+        except Exception as driver_error:
+            logger.error(f"Failed to setup ChromeDriver: {str(driver_error)}")
+            raise Exception(
+                "Failed to setup ChromeDriver. Please ensure you have Chrome installed "
+                "and your system allows ChromeDriver installation. Error: " + str(driver_error)
+            )
             
-        return webdriver.Chrome(service=service, options=options)
+        try:
+            # Initialize Chrome driver
+            driver = webdriver.Chrome(service=service, options=options)
+            logger.info("Chrome WebDriver initialized successfully")
+            return driver
+        except Exception as chrome_error:
+            logger.error(f"Failed to initialize Chrome: {str(chrome_error)}")
+            raise Exception(
+                "Failed to initialize Chrome. Please ensure Chrome is installed "
+                "and not being blocked by your system. Error: " + str(chrome_error)
+            )
+            
+    except FileNotFoundError as e:
+        logger.error(f"Chrome not found: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Failed to setup WebDriver: {str(e)}")
         raise
