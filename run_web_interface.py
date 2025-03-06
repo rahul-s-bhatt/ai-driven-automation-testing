@@ -16,11 +16,16 @@ def main():
 
     try:
         from src.web_interface.server import app
+        # Get port from environment variable or use 5000 as default
+        port = int(os.environ.get('PORT', 5000))
+        host = '0.0.0.0'  # Listen on all interfaces
+        debug = os.environ.get('FLASK_ENV') != 'production'
+
         print("""
 Website Testing Framework - Web Interface
 
 The web interface will be available at:
-    http://localhost:5000
+    http://{}:{}
 
 You can:
 1. Enter any website URL to test
@@ -29,9 +34,19 @@ You can:
 4. View screenshots and error reports
 
 Press Ctrl+C to stop the server
-""")
+""".format('localhost' if debug else 'your-app-url', port))
+        # Get port from environment variable or use 5000 as default
+        port = int(os.environ.get('PORT', 5000))
+        
+        # Set debug mode based on environment
+        debug = os.environ.get('FLASK_ENV') != 'production'
+        
         # Run the Flask app
-        app.run(debug=True)
+        app.run(
+            host='0.0.0.0',  # Listen on all interfaces
+            port=port,
+            debug=debug
+        )
 
     except ImportError as e:
         print(f"Error: Import failed - {str(e)}")

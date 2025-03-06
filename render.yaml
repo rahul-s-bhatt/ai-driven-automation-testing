@@ -10,7 +10,8 @@ services:
     startCommand: |
       export PYTHONPATH="/opt/render/project/src:${PYTHONPATH:-}"
       python -m pip install -v -r requirements.txt
-      PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 python -u run_web_interface.py
+      FLASK_ENV=production PORT=5000 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 python -u run_web_interface.py
+    port: 5000
     plan: free
     autoDeploy: true
     healthCheckPath: /
