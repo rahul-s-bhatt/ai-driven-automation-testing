@@ -295,7 +295,7 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
         
         return breakpoints
 
-    def _track_dom_mutations(self, driver: webdriver.Remote) -> Dict:
+    def _track_dom_mutations(self, page: Page) -> Dict:
         """Track and analyze DOM mutations."""
         script = """
             let mutations = [];
@@ -319,12 +319,33 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
         """
         
         try:
-            # Initialize mutations array in window scope
-            driver.execute_script("window.mutations = [];")
-            # Set up mutation observer
-            driver.execute_script(script)
-            time.sleep(2)  # Wait for potential dynamic content
-            final_mutations = driver.execute_script("return window.mutations;")
+            # Using Playwright's evaluate for mutation tracking
+            final_mutations = page.evaluate("""() => {
+                return new Promise((resolve) => {
+                    const mutations = [];
+                    const observer = new MutationObserver(records => {
+                        mutations.push(...records.map(r => ({
+                            type: r.type,
+                            target: r.target.tagName,
+                            addedNodes: r.addedNodes.length,
+                            removedNodes: r.removedNodes.length,
+                            timestamp: Date.now()
+                        })));
+                    });
+                    
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true
+                    });
+                    
+                    // Collect mutations for 2 seconds then resolve
+                    setTimeout(() => {
+                        observer.disconnect();
+                        resolve(mutations);
+                    }, 2000);
+                });
+            }""")
             
             return {
                 'total_mutations': len(final_mutations),
