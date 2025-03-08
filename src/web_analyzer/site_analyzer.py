@@ -2,17 +2,14 @@
 Site Analyzer module for analyzing website structure and suggesting test scenarios.
 
 This module analyzes a website's DOM structure, interactive elements, and patterns
-to suggest relevant test scenarios.
+to suggest relevant test scenarios using Playwright.
 """
 
 from typing import Dict, List, Optional, Set
 import logging
+import asyncio
 from urllib.parse import urljoin
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from playwright.sync_api import Page, expect
 
 class WebsiteStructure:
     """Data class to hold website structure information."""
@@ -31,10 +28,9 @@ class WebsiteStructure:
 class WebsiteAnalyzer:
     """Analyzes website structure and suggests test scenarios."""
 
-    def __init__(self, driver: webdriver.Remote):
-        """Initialize the analyzer with a WebDriver instance."""
-        self.driver = driver
-        self.wait = WebDriverWait(driver, 10)
+    def __init__(self, page: Page):
+        """Initialize the analyzer with a Playwright Page instance."""
+        self.page = page
         self.logger = logging.getLogger(__name__)
         self.structure = WebsiteStructure()
 
@@ -49,10 +45,8 @@ class WebsiteAnalyzer:
             Dict containing analysis results and suggested test scenarios
         """
         try:
-            self.driver.get(url)
-            self.wait.until(
-                lambda d: d.execute_script('return document.readyState') == 'complete'
-            )
+            self.page.goto(url)
+            self.page.wait_for_load_state('networkidle')
             
             # Analyze different aspects of the website
             self._analyze_forms()
@@ -70,7 +64,7 @@ class WebsiteAnalyzer:
     def _analyze_forms(self):
         """Analyze forms and input fields."""
         # Find all forms
-        forms = self.driver.find_elements(By.TAG_NAME, "form")
+        forms = self.page.query_selector_all("form")
         for form in forms:
             form_data = {
                 "inputs": [],
@@ -79,7 +73,7 @@ class WebsiteAnalyzer:
             }
             
             # Analyze form inputs
-            inputs = form.find_elements(By.TAG_NAME, "input")
+            inputs = form.query_selector_all("input")
             for input_field in inputs:
                 input_type = input_field.get_attribute("type")
                 if input_type:
@@ -90,12 +84,12 @@ class WebsiteAnalyzer:
                     })
             
             # Check for submit button
-            submit = form.find_elements(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
+            submit = form.query_selector_all("button[type='submit'], input[type='submit']")
             if submit:
                 form_data["submit"] = True
             
             # Check for client-side validation
-            if "required" in form.get_attribute("innerHTML"):
+            if "required" in form.inner_html():
                 form_data["validation"] = True
             
             self.structure.forms.append(form_data)
@@ -103,21 +97,20 @@ class WebsiteAnalyzer:
     def _analyze_navigation(self):
         """Analyze navigation elements and menu structure."""
         # Check for common navigation patterns
-        nav_elements = self.driver.find_elements(By.TAG_NAME, "nav")
+        nav_elements = self.page.query_selector_all("nav")
         for nav in nav_elements:
-            nav_items = nav.find_elements(By.TAG_NAME, "a")
+            nav_items = nav.query_selector_all("a")
             self.structure.navigation.extend([
                 {
-                    "text": item.text,
+                    "text": item.text_content(),
                     "href": item.get_attribute("href"),
-                    "visible": item.is_displayed()
+                    "visible": item.is_visible()
                 }
                 for item in nav_items
             ])
 
         # Check for menu toggles (hamburger menu)
-        menu_toggles = self.driver.find_elements(
-            By.CSS_SELECTOR,
+        menu_toggles = self.page.query_selector_all(
             "[class*='menu'], [class*='navbar'], [class*='nav-toggle']"
         )
         if menu_toggles:
@@ -125,33 +118,33 @@ class WebsiteAnalyzer:
 
     def _analyze_dynamic_content(self):
         """Analyze dynamic content loading patterns."""
-        initial_height = self.driver.execute_script("return document.body.scrollHeight")
+        initial_height = self.page.evaluate("document.body.scrollHeight")
         
         # Scroll to check for infinite scroll
-        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        self.wait.until(lambda d: True)  # Small wait
+        self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        self.page.wait_for_timeout(1000)  # Small wait
         
-        new_height = self.driver.execute_script("return document.body.scrollHeight")
+        new_height = self.page.evaluate("document.body.scrollHeight")
         if new_height > initial_height:
             self.structure.infinite_scroll = True
         
         # Check for "Load More" buttons
-        load_more = self.driver.find_elements(
-            By.XPATH,
-            "//*[contains(text(), 'Load') and contains(text(), 'More')] | " +
-            "//*[contains(text(), 'Show') and contains(text(), 'More')]"
+        load_more = self.page.query_selector_all(
+            "text=/Load More|Show More/"
         )
         if load_more:
             self.structure.load_more = True
 
         # Check for dynamic updates (AJAX)
         observer_script = """
-            return !!window.fetch || 
-                   !!window.XMLHttpRequest ||
-                   !!document.querySelector('[data-ajax]');
+            () => {
+                return !!window.fetch ||
+                       !!window.XMLHttpRequest ||
+                       !!document.querySelector('[data-ajax]');
+            }
         """
         try:
-            has_ajax = self.driver.execute_script(observer_script)
+            has_ajax = self.page.evaluate(observer_script)
             self.structure.ajax_updates = has_ajax
         except:
             pass
@@ -168,15 +161,12 @@ class WebsiteAnalyzer:
             "auth"
         ]
         
-        # Check for auth-related elements
-        for indicator in auth_indicators:
-            elements = self.driver.find_elements(
-                By.XPATH,
-                f"//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{indicator}')]"
-            )
-            if elements:
-                self.structure.authentication = True
-                break
+        # Check for auth-related elements using a single regex
+        auth_text = '|'.join(auth_indicators)
+        elements = self.page.query_selector_all(f"text=/{auth_text}/i")
+        
+        if elements:
+            self.structure.authentication = True
 
     def _generate_test_suggestions(self) -> Dict:
         """Generate test scenario suggestions based on analysis."""

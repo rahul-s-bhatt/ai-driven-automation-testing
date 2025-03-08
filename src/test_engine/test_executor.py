@@ -1,26 +1,17 @@
 """
 Test Executor module for running automated tests with enhanced structure analysis.
 
-This module provides functionality to execute test scenarios using Selenium WebDriver,
+This module provides functionality to execute test scenarios using Playwright,
 handling element interactions and validations with structure-aware element finding.
 """
 
 import time
 from typing import Dict, List, Optional, Tuple
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import (
-    TimeoutException,
-    NoSuchElementException,
-    ElementNotInteractableException
-)
 import logging
 from pathlib import Path
 from datetime import datetime
 from bs4 import BeautifulSoup
+from playwright.sync_api import Page, expect, TimeoutError
 
 from src.web_analyzer.dom_parser import DOMParser
 from src.web_analyzer.element_classifier import ElementClassifier
@@ -30,13 +21,12 @@ from src.test_engine.scenario_parser import TestScenario, TestStep, ActionType
 class TestExecutor:
     """Main class for executing test scenarios with structure analysis."""
 
-    def __init__(self, driver: webdriver.Remote, screenshot_dir: Optional[str] = None, base_url: str = None):
+    def __init__(self, page: Page, screenshot_dir: Optional[str] = None, base_url: str = None):
         """Initialize the test executor."""
-        self.driver = driver
-        self.wait = WebDriverWait(driver, 10)
-        self.dom_parser = DOMParser(driver)
+        self.page = page
+        self.dom_parser = DOMParser(page)
         self.element_classifier = ElementClassifier()
-        self.structure_analyzer = StructureAnalyzer(driver)
+        self.structure_analyzer = StructureAnalyzer(page)
         self.screenshot_dir = Path(screenshot_dir) if screenshot_dir else None
         self.base_url = base_url
         self.logger = self._setup_logger()
@@ -109,8 +99,8 @@ class TestExecutor:
             # Update structure analysis with collected metrics
             self.structure_analysis['structure']['page_metrics'] = self.page_metrics
             
-            self.driver.get(self.base_url)
-            self.wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
+            self.page.goto(self.base_url)
+            self.page.wait_for_load_state('domcontentloaded')
         except Exception as e:
             error_msg = f"Failed to analyze website: {str(e)}"
             self.logger.error(error_msg)
@@ -144,7 +134,7 @@ class TestExecutor:
 
         return success, errors, self.page_metrics
 
-    def _find_element(self, target: str, timeout: int = 10) -> webdriver.Remote:
+    def _find_element(self, target: str, timeout: int = 10000) -> Optional['ElementHandle']:
         """Find an element using enhanced structure analysis and smart strategies."""
         try:
             # First try enhanced structure-based selectors
@@ -162,10 +152,10 @@ class TestExecutor:
             if self.element_selectors:
                 if selector := self._get_structure_based_selector(target):
                     try:
-                        return self.wait.until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                        )
-                    except TimeoutException:
+                        locator = self.page.locator(selector)
+                        locator.wait_for(timeout=timeout)
+                        return locator
+                    except TimeoutError:
                         pass
 
             # Finally fallback to multiple strategies
@@ -173,9 +163,9 @@ class TestExecutor:
 
         except Exception as e:
             self.logger.error(f"Error finding element '{target}': {str(e)}")
-            raise NoSuchElementException(f"Could not find element: {target}")
+            raise TimeoutError(f"Could not find element: {target}")
 
-    def _find_with_enhanced_analysis(self, target: str, timeout: int) -> Optional[webdriver.Remote]:
+    def _find_with_enhanced_analysis(self, target: str, timeout: int) -> Optional['ElementHandle']:
         """Find element using enhanced structure analysis."""
         try:
             # Get element suggestions from structure analysis
@@ -188,10 +178,10 @@ class TestExecutor:
             # Try each suggested selector
             for selector in suggested_selectors:
                 try:
-                    return self.wait.until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                    )
-                except TimeoutException:
+                    locator = self.page.locator(selector)
+                    locator.wait_for(timeout=timeout)
+                    return locator
+                except TimeoutError:
                     continue
 
             return None
@@ -199,78 +189,78 @@ class TestExecutor:
             self.logger.debug(f"Enhanced analysis search failed: {str(e)}")
             return None
 
-    def _find_by_semantic_meaning(self, target: str, timeout: int) -> Optional[webdriver.Remote]:
+    def _find_by_semantic_meaning(self, target: str, timeout: int) -> Optional['ElementHandle']:
         """Find element by semantic meaning using ARIA roles and labels."""
         semantic_strategies = [
             # By ARIA role
-            (By.CSS_SELECTOR, f'[role="{target.lower()}"]'),
-            (By.CSS_SELECTOR, f'[role="button"][aria-label*="{target}"]'),
+            f'role="{target.lower()}"',
+            f'[role="button"][aria-label*="{target}"]',
             
             # By ARIA label
-            (By.CSS_SELECTOR, f'[aria-label*="{target}"]'),
-            (By.CSS_SELECTOR, f'[aria-describedby*="{target}"]'),
+            f'[aria-label*="{target}"]',
+            f'[aria-describedby*="{target}"]',
             
             # By semantic HTML5 elements
-            (By.CSS_SELECTOR, f'{target.lower()}'),
-            (By.CSS_SELECTOR, f'nav[aria-label*="{target}"]'),
-            (By.CSS_SELECTOR, f'header[role="banner"]'),
+            target.lower(),
+            f'nav[aria-label*="{target}"]',
+            'header[role="banner"]',
             
             # By text content in semantic elements
-            (By.XPATH, f'//nav[contains(text(),"{target}")]'),
-            (By.XPATH, f'//header[contains(text(),"{target}")]'),
-            (By.XPATH, f'//footer[contains(text(),"{target}")]'),
+            f'nav:has-text("{target}")',
+            f'header:has-text("{target}")',
+            f'footer:has-text("{target}")',
         ]
 
-        for by, selector in semantic_strategies:
+        for selector in semantic_strategies:
             try:
-                return self.wait.until(
-                    EC.presence_of_element_located((by, selector))
-                )
-            except TimeoutException:
+                locator = self.page.locator(selector)
+                locator.wait_for(timeout=timeout)
+                return locator
+            except TimeoutError:
                 continue
 
         return None
 
-    def _find_with_fallback_strategies(self, target: str, timeout: int) -> webdriver.Remote:
+    def _find_with_fallback_strategies(self, target: str, timeout: int) -> 'ElementHandle':
         """Find element using multiple fallback strategies."""
         strategies = [
             # Standard attributes
-            (By.ID, target),
-            (By.NAME, target),
-            (By.CLASS_NAME, target),
-            (By.CSS_SELECTOR, target),
+            f'#{target}',  # ID
+            f'[name="{target}"]',  # Name
+            f'.{target}',  # Class
+            target,  # CSS selector
             
             # Text content
-            (By.XPATH, f"//*[contains(text(), '{target}')]"),
-            (By.XPATH, f"//*[text()[normalize-space()='{target}']]"),
+            f'text="{target}"',
+            f'text={target}',
             
             # Button variations
-            (By.XPATH, f"//button[contains(text(), '{target}')]"),
-            (By.XPATH, f"//button[@aria-label='{target}']"),
+            f'button:has-text("{target}")',
+            f'button[aria-label="{target}"]',
             
             # Input variations
-            (By.XPATH, f"//input[@placeholder='{target}']"),
-            (By.XPATH, f"//input[@aria-label='{target}']"),
-            (By.XPATH, f"//label[contains(text(), '{target}')]/..//input"),
+            f'input[placeholder="{target}"]',
+            f'input[aria-label="{target}"]',
+            f'label:has-text("{target}") >> input',
             
             # Link variations
-            (By.XPATH, f"//a[contains(text(), '{target}')]"),
-            (By.XPATH, f"//a[@aria-label='{target}']"),
+            f'a:has-text("{target}")',
+            f'a[aria-label="{target}"]',
             
             # Complex relationships
-            (By.XPATH, f"//label[contains(text(), '{target}')]/..//*[self::input or self::select or self::textarea]"),
-            (By.XPATH, f"//*[@aria-labelledby=//label[contains(text(), '{target}')]/@id]"),
+            f'label:has-text("{target}") >> input, select, textarea',
+            f'[aria-labelledby="label:has-text(\'{target}\')"]',
         ]
 
-        for by, selector in strategies:
+        for selector in strategies:
             try:
-                return self.wait.until(
-                    EC.presence_of_element_located((by, selector))
-                )
-            except TimeoutException:
+                locator = self.page.locator(selector)
+                locator.wait_for(timeout=timeout)
+                return locator
+            except TimeoutError:
                 continue
 
-        raise NoSuchElementException(f"Could not find element: {target}")
+        raise TimeoutError(f"Could not find element: {target}")
 
     def _get_structure_based_selector(self, target: str) -> Optional[str]:
         """Get selector from structure analysis results."""
@@ -316,20 +306,18 @@ class TestExecutor:
     def _handle_click(self, step: TestStep):
         """Handle click action."""
         element = self._find_element(step.target)
-        self.wait.until(EC.element_to_be_clickable(element))
         element.click()
 
     def _handle_type(self, step: TestStep):
         """Handle type action."""
         element = self._find_element(step.target)
-        element.clear()
-        element.send_keys(step.value)
+        element.fill("")  # Clear first
+        element.type(step.value)
 
     def _handle_select(self, step: TestStep):
         """Handle select action."""
         element = self._find_element(step.target)
-        select = Select(element)
-        select.select_by_visible_text(step.value)
+        element.select_option(label=step.value)
 
     def _handle_verify(self, step: TestStep):
         """Handle verify action with structure awareness."""
@@ -337,25 +325,24 @@ class TestExecutor:
             if 'new content' in step.description.lower():
                 # Use structure analysis for content verification
                 if self.structure_analysis.get('structure', {}).get('dynamic_content', {}).get('infinite_scroll', False):
-                    current_height = self.driver.execute_script("return document.body.scrollHeight")
+                    current_height = self.page.evaluate("document.body.scrollHeight")
                     assert current_height > self._last_height, "No new content loaded"
                     self._last_height = current_height
             else:
                 element = self._find_element(step.target)
                 if 'appears' in step.description:
-                    assert element.is_displayed(), f"Element {step.target} is not visible"
+                    expect(element).to_be_visible()
                 elif 'contains' in step.description:
-                    assert step.value.lower() in element.text.lower(), \
-                        f"Expected text '{step.value}' not found in element {step.target}"
-        except (TimeoutException, AssertionError) as e:
+                    expect(element).to_contain_text(step.value)
+        except (TimeoutError, AssertionError) as e:
             raise AssertionError(f"Verification failed: {str(e)}")
 
     def _handle_wait(self, step: TestStep):
         """Handle wait action."""
         if step.target.lower() == 'page':
-            time.sleep(int(step.value or 2))
+            self.page.wait_for_timeout(int(step.value or 2) * 1000)
         else:
-            self._find_element(step.target, timeout=int(step.value or 10))
+            self._find_element(step.target, timeout=int(step.value or 10) * 1000)
 
     def _handle_scroll(self, step: TestStep):
         """Handle scroll action using structure analysis."""
@@ -369,37 +356,33 @@ class TestExecutor:
 
         if 'till end' in description or 'to end' in description:
             if scroll_container:
-                self.driver.execute_script(
-                    f"document.querySelector('{scroll_container}').scrollTo(0, document.querySelector('{scroll_container}').scrollHeight);"
-                )
+                self.page.evaluate(f"""
+                    document.querySelector('{scroll_container}').scrollTo(
+                        0, document.querySelector('{scroll_container}').scrollHeight
+                    )
+                """)
             else:
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         elif 'till top' in description or 'to top' in description:
             if scroll_container:
-                self.driver.execute_script(
-                    f"document.querySelector('{scroll_container}').scrollTo(0, 0);"
-                )
+                self.page.evaluate(f"document.querySelector('{scroll_container}').scrollTo(0, 0)")
             else:
-                self.driver.execute_script("window.scrollTo(0, 0);")
+                self.page.evaluate("window.scrollTo(0, 0)")
         else:
             element = self._find_element(target)
-            self.driver.execute_script(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});",
-                element
-            )
+            element.scroll_into_view_if_needed()
 
-        time.sleep(1)  # Wait for scroll to complete
+        self.page.wait_for_timeout(1000)  # Wait for scroll to complete
 
     def _handle_hover(self, step: TestStep):
         """Handle hover action."""
         element = self._find_element(step.target)
-        ActionChains(self.driver).move_to_element(element).perform()
+        element.hover()
 
     def _handle_assert(self, step: TestStep):
         """Handle assert action."""
         element = self._find_element(step.target)
-        assert step.value.lower() in element.text.lower(), \
-            f"Assertion failed: Expected '{step.value}' in element {step.target}"
+        expect(element).to_contain_text(step.value)
 
     def take_screenshot(self, name: str):
         """Take a screenshot if screenshot directory is configured."""
@@ -408,7 +391,7 @@ class TestExecutor:
             filename = f"{name}_{timestamp}.png"
             filepath = self.screenshot_dir / filename
             self.screenshot_dir.mkdir(parents=True, exist_ok=True)
-            self.driver.save_screenshot(str(filepath))
+            self.page.screenshot(path=str(filepath))
             self.logger.info(f"Screenshot saved: {filepath}")
 
     def _format_error_message(self, step: TestStep, error: str) -> str:
@@ -451,13 +434,16 @@ class TestExecutor:
     def _collect_performance_metrics(self):
         """Collect performance metrics using browser APIs."""
         try:
-            timing = self.driver.execute_script("""
-                let timing = performance.timing;
-                return {
-                    'pageLoadTime': timing.loadEventEnd - timing.navigationStart,
-                    'domContentLoaded': timing.domContentLoadedEventEnd - timing.navigationStart,
-                    'firstPaint': performance.getEntriesByType('paint')[0]?.startTime || 0,
-                    'firstContentfulPaint': performance.getEntriesByType('paint')[1]?.startTime || 0
+            timing = self.page.evaluate("""
+                () => {
+                    const nav = performance.getEntriesByType('navigation')[0];
+                    const paint = performance.getEntriesByType('paint');
+                    return {
+                        'pageLoadTime': nav.loadEventEnd - nav.startTime,
+                        'domContentLoaded': nav.domContentLoadedEventEnd - nav.startTime,
+                        'firstPaint': paint[0]?.startTime || 0,
+                        'firstContentfulPaint': paint[1]?.startTime || 0
+                    };
                 }
             """)
             self.page_metrics['performance'].update(timing)
@@ -468,23 +454,13 @@ class TestExecutor:
     def _collect_accessibility_metrics(self):
         """Collect accessibility metrics using axe-core."""
         try:
-            # Inject axe-core if not present
-            self.driver.execute_async_script("""
-                var callback = arguments[arguments.length - 1];
-                if (!window.axe) {
-                    var script = document.createElement('script');
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.0/axe.min.js';
-                    script.onload = callback;
-                    document.head.appendChild(script);
-                } else {
-                    callback();
-                }
-            """)
+            # Add axe-core to the page
+            self.page.add_script_tag(url='https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.0/axe.min.js')
+            self.page.wait_for_load_state('networkidle')
 
             # Run accessibility tests
-            results = self.driver.execute_async_script("""
-                var callback = arguments[arguments.length - 1];
-                axe.run().then(callback);
+            results = self.page.evaluate("""
+                async () => await axe.run()
             """)
 
             self.page_metrics['accessibility'].update({
@@ -504,7 +480,7 @@ class TestExecutor:
             if self.screenshot_dir:
                 baseline_path = self.screenshot_dir / 'baseline.png'
                 self.screenshot_dir.mkdir(parents=True, exist_ok=True)
-                self.driver.save_screenshot(str(baseline_path))
+                self.page.screenshot(path=str(baseline_path))
                 self.page_metrics['visual_regression']['baseline'] = str(baseline_path)
                 self.logger.info("Visual regression baseline captured")
         except Exception as e:
@@ -522,7 +498,7 @@ class TestExecutor:
 
             # Take current screenshot
             current_path = self.screenshot_dir / 'current.png'
-            self.driver.save_screenshot(str(current_path))
+            self.page.screenshot(path=str(current_path))
 
             # Load images
             baseline = cv2.imread(self.page_metrics['visual_regression']['baseline'])
@@ -550,5 +526,5 @@ class TestExecutor:
 
     def cleanup(self):
         """Clean up resources."""
-        if self.driver:
-            self.driver.quit()
+        if self.page:
+            self.page.close()
