@@ -92,7 +92,7 @@ def analyze_site():
             analysis_service = WebAnalysisService(page)
             
             # Analyze website
-            analysis_results = analysis_service.analyze_page()
+            analysis_results = analysis_service.analyze_page(url)
 
             # Generate test output files
             if 'dual_mode_tests' in analysis_results:
