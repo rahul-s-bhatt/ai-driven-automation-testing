@@ -4,8 +4,7 @@ Interface and implementations for enhanced structure analysis functionality.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import Page
 import logging
 import time
 
@@ -13,7 +12,7 @@ class StructureAnalyzerInterface(ABC):
     """Interface for structure analysis implementations."""
     
     @abstractmethod
-    def analyze_structure(self, soup: BeautifulSoup, driver: webdriver.Remote) -> Dict:
+    def analyze_structure(self, soup: BeautifulSoup, page: Page) -> Dict:
         """Analyze page structure and return detailed information."""
         pass
 
@@ -64,7 +63,7 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
             }
         }
 
-    def analyze_structure(self, soup: BeautifulSoup, driver: webdriver.Remote) -> Dict:
+    def analyze_structure(self, soup: BeautifulSoup, page: Page) -> Dict:
         """
         Perform enhanced structure analysis including:
         - Layout pattern detection
@@ -78,8 +77,8 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
                 self.logger.error("BeautifulSoup object is None")
                 return self._get_empty_structure()
                 
-            if not driver:
-                self.logger.error("WebDriver object is None")
+            if not page:
+                self.logger.error("Playwright Page object is None")
                 return self._get_empty_structure()
 
             try:
@@ -88,14 +87,22 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
                     self.logger.error("Empty page content")
                     return self._get_empty_structure()
 
-                navigation_time = driver.execute_script('return window.performance.timing.navigationStart')
-                load_time = driver.execute_script('return window.performance.timing.loadEventEnd - window.performance.timing.navigationStart')
-                load_time = load_time / 1000 if load_time > 0 else 0  # Convert to seconds
+                # Get performance metrics using Playwright
+                timing = page.evaluate("""() => {
+                    const nav = performance.getEntriesByType('navigation')[0];
+                    return {
+                        navigationStart: nav ? nav.startTime : performance.timing.navigationStart,
+                        loadTime: nav ? nav.duration : (performance.timing.loadEventEnd - performance.timing.navigationStart),
+                        resourceCount: performance.getEntriesByType('resource').length
+                    }
+                }""")
+                
+                load_time = timing['loadTime'] / 1000 if timing['loadTime'] > 0 else 0  # Convert to seconds
 
                 page_metrics = {
                     'load_time': round(load_time, 2),
                     'dom_ready': round(load_time * 0.8, 2),  # Approximate DOM ready time
-                    'resources_loaded': len(driver.execute_script('return window.performance.getEntries()')),
+                    'resources_loaded': timing['resourceCount'],
                     'element_counts': self._count_elements(soup)
                 }
 
@@ -104,7 +111,7 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
                         'page_metrics': page_metrics,
                         'layout': self._analyze_layout(soup) or {},
                         'components': self._analyze_components(soup) or {},
-                        'dynamic_content': self._analyze_dynamic_content(driver) or {},
+                        'dynamic_content': self._analyze_dynamic_content(page) or {},
                         'relationships': self._analyze_relationships(soup) or {},
                         'accessibility': self._analyze_accessibility(soup) or {}
                     }
@@ -144,13 +151,13 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
             'forms': self._analyze_form_components(soup)
         }
 
-    def _analyze_dynamic_content(self, driver: webdriver.Remote) -> Dict:
+    def _analyze_dynamic_content(self, page: Page) -> Dict:
         """Analyze dynamic content behavior."""
         return {
-            'mutations': self._track_dom_mutations(driver),
-            'loading_patterns': self._analyze_loading_patterns(driver),
-            'ajax_patterns': self._detect_ajax_patterns(driver),
-            'state_changes': self._analyze_state_changes(driver)
+            'mutations': self._track_dom_mutations(page),
+            'loading_patterns': self._analyze_loading_patterns(page),
+            'ajax_patterns': self._detect_ajax_patterns(page),
+            'state_changes': self._analyze_state_changes(page)
         }
 
     def _analyze_relationships(self, soup: BeautifulSoup) -> Dict:
@@ -640,18 +647,18 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
             self.logger.error(f"Error analyzing alt texts: {str(e)}", exc_info=True)
             return {'total_images': 0, 'with_alt': 0, 'without_alt': 0}
 
-    def _analyze_loading_patterns(self, driver: webdriver.Remote) -> Dict:
+    def _analyze_loading_patterns(self, page: Page) -> Dict:
         """Analyze page loading patterns."""
         try:
             # Check for infinite scroll
-            initial_height = driver.execute_script("return document.body.scrollHeight")
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(1)
-            new_height = driver.execute_script("return document.body.scrollHeight")
+            initial_height = page.evaluate("() => document.body.scrollHeight")
+            page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(1000)  # Wait 1 second
+            new_height = page.evaluate("() => document.body.scrollHeight")
             
             # Check for lazy loading images
-            lazy_images = driver.execute_script(
-                "return document.querySelectorAll('img[loading=\"lazy\"]').length"
+            lazy_images = page.evaluate(
+                "() => document.querySelectorAll('img[loading=\"lazy\"]').length"
             )
             
             return {
@@ -662,31 +669,30 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
             self.logger.error(f"Error analyzing loading patterns: {str(e)}")
             return {}
 
-    def _detect_ajax_patterns(self, driver: webdriver.Remote) -> Dict:
+    def _detect_ajax_patterns(self, page: Page) -> Dict:
         """Detect AJAX usage patterns."""
         try:
-            # Inject and execute detection script
-            ajax_detection = driver.execute_script("""
+            # Using Playwright's evaluate to detect AJAX usage
+            return page.evaluate("""() => {
                 return {
                     'fetch_used': 'fetch' in window,
                     'xhr_used': 'XMLHttpRequest' in window,
                     'jquery_ajax': typeof jQuery !== 'undefined' && jQuery.ajax,
                     'axios_used': typeof axios !== 'undefined'
                 }
-            """)
-            
-            return ajax_detection
+            }""")
         except Exception as e:
             self.logger.error(f"Error detecting AJAX patterns: {str(e)}")
             return {}
 
-    def _analyze_state_changes(self, driver: webdriver.Remote) -> Dict:
+    def _analyze_state_changes(self, page: Page) -> Dict:
         """Analyze DOM state changes."""
         try:
+            dynamic_elements = self._find_dynamic_elements(page)
             return {
                 'mutation_frequency': self._mutation_count / max(1, len(self._content_update_times)),
                 'update_patterns': self._analyze_update_patterns(),
-                'dynamic_elements': self._find_dynamic_elements(driver)
+                'dynamic_elements': dynamic_elements
             }
         except Exception as e:
             self.logger.error(f"Error analyzing state changes: {str(e)}")
@@ -709,10 +715,10 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
             'update_interval': avg_interval
         }
 
-    def _find_dynamic_elements(self, driver: webdriver.Remote) -> List[Dict]:
+    def _find_dynamic_elements(self, page: Page) -> List[Dict]:
         """Find elements that change frequently."""
         try:
-            dynamic_elements = driver.execute_script("""
+            return page.evaluate("""() => {
                 return Array.from(document.querySelectorAll('*')).filter(el => {
                     return el.getAttribute('data-dynamic') ||
                            el.classList.contains('dynamic') ||
@@ -723,9 +729,7 @@ class EnhancedStructureAnalyzer(StructureAnalyzerInterface):
                     id: el.id,
                     classes: Array.from(el.classList)
                 }));
-            """)
-            
-            return dynamic_elements
+            }""")
         except Exception as e:
             self.logger.error(f"Error finding dynamic elements: {str(e)}")
             return []

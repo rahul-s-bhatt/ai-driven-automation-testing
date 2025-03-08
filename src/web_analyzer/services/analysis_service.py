@@ -3,7 +3,7 @@ Service layer for coordinating web analysis operations with enhanced capabilitie
 """
 from typing import Dict, Optional, List
 from bs4 import BeautifulSoup
-from selenium import webdriver
+from playwright.sync_api import Page
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -16,9 +16,9 @@ from src.test_engine.dual_mode.generators import HumanInstructionsGenerator, Aut
 class WebAnalysisService:
     """Service for coordinating web analysis operations."""
 
-    def __init__(self, driver: webdriver.Remote):
+    def __init__(self, page: Page):
         """Initialize the analysis service with required analyzers."""
-        self.driver = driver
+        self.page = page
         self.logger = logging.getLogger(__name__)
         
         # Configure logger
@@ -332,13 +332,13 @@ class WebAnalysisService:
         """Load and parse page content."""
         try:
             self.logger.debug(f"Attempting to load URL: {url}")
-            self.driver.get(url)
+            self.page.goto(url)
             
             # Wait for page load
             self.logger.debug("Waiting for page to load completely...")
-            self.driver.execute_script("return document.readyState") == 'complete'
+            self.page.wait_for_load_state('networkidle')
             
-            self.current_page_source = self.driver.page_source
+            self.current_page_source = self.page.content()
             if not self.current_page_source:
                 raise ValueError("Empty page source received")
                 
@@ -422,7 +422,7 @@ class WebAnalysisService:
                 return default_structure
                 
             self.logger.debug("Starting structure analysis...")
-            result = self.structure_analyzer.analyze_structure(self.current_soup, self.driver)
+            result = self.structure_analyzer.analyze_structure(self.current_soup, self.page)
             
             if result is None:
                 self.logger.warning("Structure analyzer returned None")
